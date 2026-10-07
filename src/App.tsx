@@ -1,6 +1,8 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
+import type { Viewer } from 'cesium'
 import CesiumViewer from './cesium/CesiumViewer'
-import { PLANNER_POINT_LABELS, type PlannerPointId } from './planning/points'
+import { flyToOverhead } from './cesium/camera'
+import { DEMO_VIEW, PLANNER_POINT_LABELS, type PlannerPointId } from './planning/points'
 import type { GeoPoint } from './geodesy/geodesy'
 
 const TOOLBAR_STYLE = {
@@ -47,6 +49,7 @@ export default function App() {
   const [observer, setObserver] = useState<GeoPoint | null>(null)
   const [target, setTarget] = useState<GeoPoint | null>(null)
   const [activePoint, setActivePoint] = useState<PlannerPointId>('observer')
+  const viewerRef = useRef<Viewer | null>(null)
 
   const points: Record<PlannerPointId, GeoPoint | null> = { observer, target }
 
@@ -66,9 +69,24 @@ export default function App() {
     }
   }
 
+  function flyToDemoView(): void {
+    const viewer = viewerRef.current
+    if (viewer === null || viewer.isDestroyed()) {
+      return
+    }
+    flyToOverhead(viewer, DEMO_VIEW)
+  }
+
   return (
     <>
-      <CesiumViewer observer={observer} target={target} onScenePick={handleScenePick} />
+      <CesiumViewer
+        observer={observer}
+        target={target}
+        onScenePick={handleScenePick}
+        onViewerReady={(viewer) => {
+          viewerRef.current = viewer
+        }}
+      />
       <div style={TOOLBAR_STYLE}>
         {(['observer', 'target'] as const).map((id) => {
           const point = points[id]
@@ -89,6 +107,13 @@ export default function App() {
           title="Rimuove il punto attivo"
         >
           Azzera
+        </button>
+        <button
+          onClick={flyToDemoView}
+          style={BUTTON_STYLE}
+          title="Vista demo: 45,5°N 10,22°E, scala ≈ 1 km/cm"
+        >
+          Demo vista
         </button>
       </div>
     </>

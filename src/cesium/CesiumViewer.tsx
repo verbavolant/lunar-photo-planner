@@ -18,6 +18,8 @@ export interface CesiumViewerProps {
   observer: GeoPoint | null
   target: GeoPoint | null
   onScenePick: (point: GeoPoint) => void
+  /** Chiamato dopo la creazione del Viewer (anche nel remount di StrictMode). */
+  onViewerReady?: (viewer: Viewer) => void
 }
 
 // URL root dei Photorealistic 3D Tiles: sample ufficiale Google
@@ -42,7 +44,12 @@ const OVERLAY_STYLE = {
 // Scena CesiumJS + Google Photorealistic 3D Tiles (T-003). L'attribution dei
 // tiles resta a schermo: requisito delle Google Map Tiles API Policies.
 // T-008: il clic posiziona Observer/Target sulla superficie reale.
-export default function CesiumViewer({ observer, target, onScenePick }: CesiumViewerProps) {
+export default function CesiumViewer({
+  observer,
+  target,
+  onScenePick,
+  onViewerReady,
+}: CesiumViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const viewerRef = useRef<Viewer | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
@@ -76,6 +83,7 @@ export default function CesiumViewer({ observer, target, onScenePick }: CesiumVi
     })
 
     viewerRef.current = viewer
+    onViewerReady?.(viewer)
 
     // Clic sinistro → punto reale sulla superficie (tiles o ellissoide).
     const clickHandler = new ScreenSpaceEventHandler(viewer.scene.canvas)
@@ -163,8 +171,8 @@ export default function CesiumViewer({ observer, target, onScenePick }: CesiumVi
       })
     }
 
-    // Linea Observer→Target: segmento retto in 3D (linea di vista). Dove è
-    // occlusa da edifici/terreno resta visibile in trasparenza.
+    // Linea Observer→Target: segmento retto in 3D (linea di vista). La valutazione
+    // reale dell'occlusione arriverà in Fase 8 con ray casting.
     const sightLineId = 'line-observer-target'
     const existingSightLine = viewer.entities.getById(sightLineId)
     if (existingSightLine !== undefined) {
@@ -180,7 +188,6 @@ export default function CesiumViewer({ observer, target, onScenePick }: CesiumVi
           ],
           width: 2,
           material: Color.LIME,
-          depthFailMaterial: Color.LIME.withAlpha(0.3),
           arcType: ArcType.NONE,
         },
       })
