@@ -2,7 +2,7 @@
 
 Web app per pianificare fotografie della Luna in allineamento con edifici, monumenti e paesaggio reale, usando CesiumJS, Google Photorealistic 3D Tiles e calcoli astronomici topocentrici.
 
-> Stato: **Fase 1 completata** (T-001…T-005; T-006 in chiusura). Live: https://verbavolant.github.io/lunar-photo-planner/ — React + TypeScript + Vite con CesiumJS e Google Photorealistic 3D Tiles (chiave in `.env.local` o secret Actions), deploy automatico via GitHub Actions.
+> Stato: **Fase 1 completata** (T-001…T-006, approvata). Live: https://verbavolant.github.io/lunar-photo-planner/ — Fase 2 avviata (Observer + Target + geodesia).
 
 ## Obiettivo
 Permettere al fotografo di scegliere un soggetto e capire dove posizionarsi, quando scattare, quale focale usare e come apparirà la Luna rispetto al soggetto.
