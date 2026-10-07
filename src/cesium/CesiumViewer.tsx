@@ -1,6 +1,23 @@
 import { useEffect, useRef, useState } from 'react'
-import { Cesium3DTileset, Viewer } from 'cesium'
+import {
+  Cesium3DTileset,
+  Cartesian2,
+  Cartesian3,
+  Color,
+  ScreenSpaceEventHandler,
+  ScreenSpaceEventType,
+  Viewer,
+} from 'cesium'
 import 'cesium/Build/Cesium/Widgets/widgets.css'
+import { pickPointOnScene } from './pick'
+import type { GeoPoint } from '../geodesy/geodesy'
+import type { PlannerPointId } from '../planning/points'
+
+export interface CesiumViewerProps {
+  observer: GeoPoint | null
+  target: GeoPoint | null
+  onScenePick: (point: GeoPoint) => void
+}
 
 // URL root dei Photorealistic 3D Tiles: sample ufficiale Google
 // (developers.google.com/maps/documentation/tile/3d-tiles, agg. 2026-10-05).
@@ -23,9 +40,15 @@ const OVERLAY_STYLE = {
 
 // Scena CesiumJS + Google Photorealistic 3D Tiles (T-003). L'attribution dei
 // tiles resta a schermo: requisito delle Google Map Tiles API Policies.
-export default function CesiumViewer() {
+// T-008: il clic posiziona Observer/Target sulla superficie reale.
+export default function CesiumViewer({ observer, target, onScenePick }: CesiumViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null)
+  const viewerRef = useRef<Viewer | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+  // Il callback arriva da React a ogni render: il handler del click legge il
+  // riferimento aggiornato senza dover essere ricreato.
+  const onScenePickRef = useRef(onScenePick)
+  onScenePickRef.current = onScenePick
 
   useEffect(() => {
     const container = containerRef.current
@@ -50,6 +73,17 @@ export default function CesiumViewer() {
       infoBox: false,
       selectionIndicator: false,
     })
+
+    viewerRef.current = viewer
+
+    // Clic sinistro → punto reale sulla superficie (tiles o ellissoide).
+    const clickHandler = new ScreenSpaceEventHandler(viewer.scene.canvas)
+    clickHandler.setInputAction((movement: { position: Cartesian2 }) => {
+      const pickedPoint = pickPointOnScene(viewer, movement.position)
+      if (pickedPoint !== undefined) {
+        onScenePickRef.current(pickedPoint)
+      }
+    }, ScreenSpaceEventType.LEFT_CLICK)
 
     // CesiumJS non segue automaticamente il ridimensionamento del container.
     const resizeObserver = new ResizeObserver(() => viewer.resize())
@@ -90,10 +124,44 @@ export default function CesiumViewer() {
 
     return () => {
       disposed = true
+      clickHandler.destroy()
       resizeObserver.disconnect()
       viewer.destroy()
+      viewerRef.current = null
     }
   }, [])
+
+  // Marker Observer/Target: ricreati quando cambia il punto nello stato.
+  useEffect(() => {
+    const viewer = viewerRef.current
+    if (viewer === null) {
+      return
+    }
+    const markers: [PlannerPointId, GeoPoint | null][] = [
+      ['observer', observer],
+      ['target', target],
+    ]
+    for (const [id, point] of markers) {
+      const markerId = `marker-${id}`
+      const existing = viewer.entities.getById(markerId)
+      if (existing !== undefined) {
+        viewer.entities.remove(existing)
+      }
+      if (point === null) {
+        continue
+      }
+      viewer.entities.add({
+        id: markerId,
+        position: Cartesian3.fromDegrees(point.longitudeDeg, point.latitudeDeg, point.heightM),
+        point: {
+          pixelSize: 12,
+          color: id === 'observer' ? Color.CYAN : Color.ORANGE,
+          outlineColor: Color.BLACK,
+          outlineWidth: 2,
+        },
+      })
+    }
+  }, [observer, target])
 
   return (
     <div style={{ position: 'absolute', inset: 0 }}>
