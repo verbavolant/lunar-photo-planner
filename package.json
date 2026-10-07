@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@cesium/core": "0.1.0",
+    "astronomy-engine": "2.1.19",
     "cesium": "^1.146.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
