@@ -3,6 +3,7 @@ import type { Viewer } from 'cesium'
 import CesiumViewer from './cesium/CesiumViewer'
 import { flyToOverhead } from './cesium/camera'
 import { DEMO_VIEW, PLANNER_POINT_LABELS, type PlannerPointId } from './planning/points'
+import { buildMeasurements } from './planning/measurements'
 import type { GeoPoint } from './geodesy/geodesy'
 
 const TOOLBAR_STYLE = {
@@ -34,6 +35,25 @@ const ACTIVE_BUTTON_STYLE = {
   ...BUTTON_STYLE,
   borderColor: '#7ab8ff',
   backgroundColor: '#24406b',
+}
+
+const PANEL_STYLE = {
+  position: 'absolute' as const,
+  top: 54,
+  left: 12,
+  zIndex: 10,
+  padding: '8px 12px',
+  borderRadius: 6,
+  backgroundColor: 'rgba(20, 20, 30, 0.85)',
+  color: '#f5f5f5',
+  fontFamily: 'sans-serif',
+  fontSize: 13,
+  display: 'grid',
+  gap: 4,
+}
+
+const MEASUREMENT_ROW_STYLE = {
+  whiteSpace: 'nowrap' as const,
 }
 
 // Coordinate leggibili in gradi decimali con emisfero e quota in metri.
@@ -116,6 +136,15 @@ export default function App() {
           Demo vista
         </button>
       </div>
+      {observer !== null && target !== null && (
+        <div style={PANEL_STYLE}>
+          {buildMeasurements(observer, target).map((row) => (
+            <div key={row.label} style={MEASUREMENT_ROW_STYLE}>
+              {row.label}: <strong>{row.value}</strong>
+            </div>
+          ))}
+        </div>
+      )}
     </>
   )
 }
