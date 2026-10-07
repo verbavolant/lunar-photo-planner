@@ -1,0 +1,37 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Chiavi Google (il file .env.example resta versionato)
+.env
+.env.*
+!.env.example
+# File con segreti OAuth scaricati da Google Cloud Console
+client_secret_*.json
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+#da AI
+AGENTS.md
+CLAUDE.md
+docs/*
+

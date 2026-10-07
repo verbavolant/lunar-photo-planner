@@ -1,0 +1,59 @@
+# Deploy statico su GitHub Pages (T-005). Pattern a due job dal README ufficiale
+# di actions/deploy-pages (v4) e actions/upload-pages-artifact (v3).
+# La base relativa in vite.config.ts (T-004) rende superfluo un flag --base.
+# La chiave Google arriva dal secret VITE_GOOGLE_MAPS_API_KEY (mai in chiaro
+# nel repo; viene inclusa nel bundle solo per via di una chiave browser
+# protetta da restrizioni HTTP referrer).
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          # Vite 8 richiede ^20.19.0 || >=22.12.0; cesium >=22.0.0
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Test
+        run: npm test
+      - name: Build
+        run: npm run build
+        env:
+          VITE_GOOGLE_MAPS_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
