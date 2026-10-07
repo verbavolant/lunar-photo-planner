@@ -24,9 +24,9 @@ export function formatDistanceM(meters: number): string {
   return `${formatItalianNumber(meters / 1000, 2)} km`
 }
 
-/** Angolo in gradi decimali con 2 decimali. */
-export function formatAngleDeg(degrees: number): string {
-  return `${formatItalianNumber(degrees, 2)}°`
+/** Angolo in gradi decimali con separatore italiano (default 2 decimali). */
+export function formatAngleDeg(degrees: number, fractionDigits = 2): string {
+  return `${formatItalianNumber(degrees, fractionDigits)}°`
 }
 
 /** Differenza quota firmata in metri, sempre con segno (+/−). */

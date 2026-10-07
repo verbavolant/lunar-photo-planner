@@ -2,16 +2,33 @@ import { useRef, useState } from 'react'
 import type { Viewer } from 'cesium'
 import CesiumViewer from './cesium/CesiumViewer'
 import { flyToOverhead } from './cesium/camera'
+import { moonTopocentric } from './astronomy/moon'
 import { DEMO_VIEW, PLANNER_POINT_LABELS, type PlannerPointId } from './planning/points'
-import { buildMeasurements } from './planning/measurements'
+import { buildMeasurements, type MeasurementRow } from './planning/measurements'
+import { formatAngleDeg, formatDistanceM } from './planning/format'
+import {
+  browserTimeZone,
+  dateToLocalInputValue,
+  effectiveTimeMs,
+  localInputValueToMs,
+} from './planning/time'
 import type { GeoPoint } from './geodesy/geodesy'
 
-const TOOLBAR_STYLE = {
+const COLUMN_STYLE = {
   position: 'absolute' as const,
   top: 12,
   left: 12,
   zIndex: 10,
   display: 'flex',
+  flexDirection: 'column' as const,
+  alignItems: 'flex-start' as const,
+  gap: 8,
+  maxWidth: 'calc(100% - 24px)',
+}
+
+const TOOLBAR_STYLE = {
+  display: 'flex',
+  flexWrap: 'wrap' as const,
   alignItems: 'center',
   gap: 8,
   padding: '6px 10px',
@@ -37,23 +54,33 @@ const ACTIVE_BUTTON_STYLE = {
   backgroundColor: '#24406b',
 }
 
-const PANEL_STYLE = {
-  position: 'absolute' as const,
-  top: 54,
-  left: 12,
-  zIndex: 10,
+const CARD_STYLE = {
+  display: 'grid',
+  gap: 6,
   padding: '8px 12px',
   borderRadius: 6,
   backgroundColor: 'rgba(20, 20, 30, 0.85)',
   color: '#f5f5f5',
   fontFamily: 'sans-serif',
   fontSize: 13,
-  display: 'grid',
-  gap: 4,
+  colorScheme: 'dark' as const,
 }
 
-const MEASUREMENT_ROW_STYLE = {
+const ROW_STYLE = {
   whiteSpace: 'nowrap' as const,
+}
+
+const TIME_ROW_STYLE = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 8,
+}
+
+const DIVIDER_STYLE = {
+  width: '100%',
+  margin: '2px 0',
+  border: 'none',
+  borderTop: '1px solid #456',
 }
 
 // Coordinate leggibili in gradi decimali con emisfero e quota in metri.
@@ -70,8 +97,21 @@ export default function App() {
   const [target, setTarget] = useState<GeoPoint | null>(null)
   const [activePoint, setActivePoint] = useState<PlannerPointId>('observer')
   const viewerRef = useRef<Viewer | null>(null)
+  const [baseDateMs, setBaseDateMs] = useState<number>(() => Date.now())
+  const [sliderOffsetMin, setSliderOffsetMin] = useState(0)
+  const effectiveDate = new Date(effectiveTimeMs(baseDateMs, sliderOffsetMin))
 
   const points: Record<PlannerPointId, GeoPoint | null> = { observer, target }
+
+  function buildMoonRows(observerPoint: GeoPoint): MeasurementRow[] {
+    const moon = moonTopocentric(observerPoint, effectiveDate)
+    return [
+      { label: 'Luna · Azimut', value: formatAngleDeg(moon.azimuthDeg) },
+      { label: 'Luna · Altitudine', value: formatAngleDeg(moon.altitudeDeg) },
+      { label: 'Luna · Distanza', value: formatDistanceM(moon.distanceM) },
+      { label: 'Luna · Diametro', value: formatAngleDeg(moon.angularDiameterDeg, 4) },
+    ]
+  }
 
   function handleScenePick(point: GeoPoint): void {
     if (activePoint === 'observer') {
@@ -107,7 +147,8 @@ export default function App() {
           viewerRef.current = viewer
         }}
       />
-      <div style={TOOLBAR_STYLE}>
+      <div style={COLUMN_STYLE}>
+        <div style={TOOLBAR_STYLE}>
         {(['observer', 'target'] as const).map((id) => {
           const point = points[id]
           return (
@@ -135,16 +176,74 @@ export default function App() {
         >
           Demo vista
         </button>
-      </div>
-      {observer !== null && target !== null && (
-        <div style={PANEL_STYLE}>
-          {buildMeasurements(observer, target).map((row) => (
-            <div key={row.label} style={MEASUREMENT_ROW_STYLE}>
-              {row.label}: <strong>{row.value}</strong>
-            </div>
-          ))}
         </div>
-      )}
+        <div style={CARD_STYLE}>
+          <label style={ROW_STYLE}>
+            Data/ora (fuso: {browserTimeZone()})
+            <input
+              type="datetime-local"
+              value={dateToLocalInputValue(new Date(baseDateMs))}
+              onChange={(event) => {
+                const ms = localInputValueToMs(event.target.value)
+                if (!Number.isNaN(ms)) {
+                  setBaseDateMs(ms)
+                  setSliderOffsetMin(0)
+                }
+              }}
+            />
+          </label>
+          <div style={TIME_ROW_STYLE}>
+            <input
+              type="range"
+              min={-720}
+              max={720}
+              step={5}
+              value={sliderOffsetMin}
+              onChange={(event) => setSliderOffsetMin(Number(event.target.value))}
+              style={{ width: 220 }}
+              aria-label="Scostamento temporale in minuti"
+            />
+            <span>
+              {sliderOffsetMin >= 0 ? '+' : ''}
+              {sliderOffsetMin} min
+            </span>
+            <button
+              onClick={() => {
+                setBaseDateMs(Date.now())
+                setSliderOffsetMin(0)
+              }}
+              style={BUTTON_STYLE}
+            >
+              Adesso
+            </button>
+          </div>
+          <div style={ROW_STYLE}>
+            Tempo effettivo (UTC): {effectiveDate.toISOString().replace('T', ' ').slice(0, 19)} UTC
+          </div>
+        </div>
+        {(observer !== null || target !== null) && (
+          <div style={CARD_STYLE}>
+            {observer !== null && target !== null && (
+              <>
+                {buildMeasurements(observer, target).map((row) => (
+                  <div key={row.label} style={ROW_STYLE}>
+                    {row.label}: <strong>{row.value}</strong>
+                  </div>
+                ))}
+                <hr style={DIVIDER_STYLE} />
+              </>
+            )}
+            {observer !== null && buildMoonRows(observer).map((row) => (
+              <div key={row.label} style={ROW_STYLE}>
+                {row.label}: <strong>{row.value}</strong>
+              </div>
+            ))}
+            {observer === null && target !== null && (
+              <div style={ROW_STYLE}>Posiziona l'Osservatore per i valori della Luna.</div>
+            )}
+          </div>
+        )}
+      </div>
     </>
   )
 }
