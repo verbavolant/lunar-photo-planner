@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import {
+  ArcType,
   Cesium3DTileset,
   Cartesian2,
   Cartesian3,
@@ -158,6 +159,29 @@ export default function CesiumViewer({ observer, target, onScenePick }: CesiumVi
           color: id === 'observer' ? Color.CYAN : Color.ORANGE,
           outlineColor: Color.BLACK,
           outlineWidth: 2,
+        },
+      })
+    }
+
+    // Linea Observer→Target: segmento retto in 3D (linea di vista). Dove è
+    // occlusa da edifici/terreno resta visibile in trasparenza.
+    const sightLineId = 'line-observer-target'
+    const existingSightLine = viewer.entities.getById(sightLineId)
+    if (existingSightLine !== undefined) {
+      viewer.entities.remove(existingSightLine)
+    }
+    if (observer !== null && target !== null) {
+      viewer.entities.add({
+        id: sightLineId,
+        polyline: {
+          positions: [
+            Cartesian3.fromDegrees(observer.longitudeDeg, observer.latitudeDeg, observer.heightM),
+            Cartesian3.fromDegrees(target.longitudeDeg, target.latitudeDeg, target.heightM),
+          ],
+          width: 2,
+          material: Color.LIME,
+          depthFailMaterial: Color.LIME.withAlpha(0.3),
+          arcType: ArcType.NONE,
         },
       })
     }
