@@ -97,12 +97,41 @@ describe('searchMoonAlignments — attraversamenti reali della linea di vista', 
     expect(results).toEqual([])
   })
 
-  it('default esportati per l\u2019anteprima UI', () => {
+  it('default esportati per l\u2019anteprima UI (finestra 2 mesi, passo coarse 15\u2032)', () => {
     expect(DEFAULT_ALIGNMENT_SEARCH).toEqual({
-      durationHours: 48,
-      stepMinutes: 5,
+      durationHours: 1440,
+      stepMinutes: 15,
       toleranceDeg: 1,
       maxResults: 8,
     })
+  })
+
+  it('il raffinamento recupera un attraversamento che il passo coarse perderebbe', () => {
+    // Passo coarse 30′ con partenza 23′ PRIMA dell'attraversamento noto: i
+    // campioni coarse più vicini cadono a ~1,8° (12:07) e ~6° (11:37), oltre
+    // la tolleranza 0,5° — senza raffinamento la ricerca sarebbe vuota.
+    const results = searchMoonAlignments({
+      observer: OBSERVER,
+      losAzimuthDeg: 152.829983,
+      losAltitudeDeg: 28.685969,
+      fromDateMs: CROSSING_UTC_MS - 23 * 60_000,
+      durationHours: 2,
+      stepMinutes: 30,
+      toleranceDeg: 0.5,
+      maxResults: 5,
+    })
+
+    expect(results.length).toBeGreaterThanOrEqual(1)
+    let best = results[0]
+    for (const candidate of results) {
+      if (best === undefined || candidate.separationDeg < best.separationDeg) {
+        best = candidate
+      }
+    }
+    if (best === undefined) {
+      throw new Error('Nessun candidato trovato')
+    }
+    expect(Math.abs(best.dateMs - CROSSING_UTC_MS)).toBeLessThanOrEqual(2 * 60_000)
+    expect(best.separationDeg).toBeLessThan(0.3)
   })
 })

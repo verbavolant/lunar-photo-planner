@@ -6,6 +6,7 @@ import { moonTopocentric } from './astronomy/moon'
 import { DEMO_VIEW, PLANNER_POINT_LABELS, type PlannerPointId } from './planning/points'
 import { buildMeasurements, type MeasurementRow } from './planning/measurements'
 import {
+  DEFAULT_ALIGNMENT_DAYS,
   DEFAULT_ALIGNMENT_SEARCH,
   searchMoonAlignments,
   type AlignmentCandidate,
@@ -123,6 +124,23 @@ const ALIGNMENT_ROW_BUTTON_STYLE = {
   whiteSpace: 'nowrap' as const,
 }
 
+const WINDOW_PARAMS_STYLE = {
+  display: 'flex',
+  gap: 10,
+  flexWrap: 'wrap' as const,
+  alignItems: 'center',
+}
+
+const PARAM_LABEL_STYLE = {
+  display: 'grid',
+  gap: 2,
+  fontSize: 12,
+}
+
+const NUMBER_INPUT_STYLE = {
+  width: 64,
+}
+
 // Coordinate leggibili in gradi decimali con emisfero e quota in metri.
 function formatPoint(point: GeoPoint): string {
   const latitudeAbs = Math.abs(point.latitudeDeg).toFixed(6)
@@ -145,6 +163,24 @@ function describeAlignmentOffsets(candidate: AlignmentCandidate): string {
   return `${horizontal} · ${vertical}`
 }
 
+/** Limita un intero dal campo numerico (fallback al default se non leggibile). */
+function clampInt(value: string, min: number, max: number, fallback: number): number {
+  const parsed = Number.parseInt(value, 10)
+  if (Number.isNaN(parsed)) {
+    return fallback
+  }
+  return Math.min(max, Math.max(min, parsed))
+}
+
+/** Limita un decimale dal campo numerico (fallback al default se non leggibile). */
+function clampFloat(value: string, min: number, max: number, fallback: number): number {
+  const parsed = Number.parseFloat(value)
+  if (Number.isNaN(parsed)) {
+    return fallback
+  }
+  return Math.min(max, Math.max(min, parsed))
+}
+
 export default function App() {
   const [observer, setObserver] = useState<GeoPoint | null>(null)
   const [target, setTarget] = useState<GeoPoint | null>(null)
@@ -155,6 +191,13 @@ export default function App() {
   const [alignmentWindowOpen, setAlignmentWindowOpen] = useState(false)
   const [alignmentResults, setAlignmentResults] = useState<AlignmentCandidate[]>([])
   const [alignmentNote, setAlignmentNote] = useState<string | null>(null)
+  const [alignmentDays, setAlignmentDays] = useState(DEFAULT_ALIGNMENT_DAYS)
+  const [alignmentStepMin, setAlignmentStepMin] = useState<number>(
+    DEFAULT_ALIGNMENT_SEARCH.stepMinutes,
+  )
+  const [alignmentToleranceDeg, setAlignmentToleranceDeg] = useState<number>(
+    DEFAULT_ALIGNMENT_SEARCH.toleranceDeg,
+  )
   const effectiveDate = new Date(effectiveTimeMs(baseDateMs, sliderOffsetMin))
 
   const points: Record<PlannerPointId, GeoPoint | null> = { observer, target }
@@ -205,7 +248,7 @@ export default function App() {
     flyToObserverView(viewer, observer, moon.azimuthDeg, moon.altitudeDeg)
   }
 
-  function openAlignmentWindow(): void {
+  function runAlignmentSearch(): void {
     if (observer === null || target === null) {
       return
     }
@@ -227,7 +270,10 @@ export default function App() {
         losAzimuthDeg: losAzimuth,
         losAltitudeDeg: losAltitude,
         fromDateMs: effectiveDate.getTime(),
-        ...DEFAULT_ALIGNMENT_SEARCH,
+        durationHours: alignmentDays * 24,
+        stepMinutes: alignmentStepMin,
+        toleranceDeg: alignmentToleranceDeg,
+        maxResults: DEFAULT_ALIGNMENT_SEARCH.maxResults,
       }),
     )
     setAlignmentWindowOpen(true)
@@ -237,6 +283,21 @@ export default function App() {
     setBaseDateMs(dateMs)
     setSliderOffsetMin(0)
     setAlignmentWindowOpen(false)
+  }
+
+  function flyToObserverOverhead(): void {
+    if (observer === null) {
+      return
+    }
+    const viewer = viewerRef.current
+    if (viewer === null || viewer.isDestroyed()) {
+      return
+    }
+    flyToOverhead(viewer, {
+      longitudeDeg: observer.longitudeDeg,
+      latitudeDeg: observer.latitudeDeg,
+      altitudeM: observer.heightM + 100,
+    })
   }
 
   return (
@@ -287,7 +348,15 @@ export default function App() {
           Vista Luna
         </button>
         <button
-          onClick={openAlignmentWindow}
+          onClick={flyToObserverOverhead}
+          style={BUTTON_STYLE}
+          disabled={observer === null}
+          title="Camera 100 m sopra l'Osservatore, puntata su di lui (vista dall'alto)"
+        >
+          Sopra Observer · 100 m
+        </button>
+        <button
+          onClick={runAlignmentSearch}
           style={BUTTON_STYLE}
           disabled={observer === null || target === null}
           title="Cerca i prossimi istanti in cui la Luna passa sulla linea Observer→Target"
@@ -367,6 +436,13 @@ export default function App() {
           <div style={WINDOW_HEADER_STYLE}>
             <span>Luna sulla linea Observer→Target</span>
             <button
+              onClick={runAlignmentSearch}
+              style={BUTTON_STYLE}
+              title="Ripete la ricerca con i parametri e il tempo attuali"
+            >
+              Ricalcola
+            </button>
+            <button
               onClick={() => setAlignmentWindowOpen(false)}
               style={BUTTON_STYLE}
               title="Chiude la finestra"
@@ -374,9 +450,60 @@ export default function App() {
               ×
             </button>
           </div>
+          <div style={WINDOW_PARAMS_STYLE}>
+            <label style={PARAM_LABEL_STYLE}>
+              Finestra (giorni)
+              <input
+                type="number"
+                min={1}
+                max={365}
+                value={alignmentDays}
+                onChange={(event) =>
+                  setAlignmentDays(clampInt(event.target.value, 1, 365, DEFAULT_ALIGNMENT_DAYS))
+                }
+                style={NUMBER_INPUT_STYLE}
+              />
+            </label>
+            <label style={PARAM_LABEL_STYLE}>
+              Passo (min)
+              <input
+                type="number"
+                min={1}
+                max={60}
+                value={alignmentStepMin}
+                onChange={(event) =>
+                  setAlignmentStepMin(
+                    clampInt(event.target.value, 1, 60, DEFAULT_ALIGNMENT_SEARCH.stepMinutes),
+                  )
+                }
+                style={NUMBER_INPUT_STYLE}
+              />
+            </label>
+            <label style={PARAM_LABEL_STYLE}>
+              Tolleranza (°)
+              <input
+                type="number"
+                min={0.05}
+                max={5}
+                step={0.05}
+                value={alignmentToleranceDeg}
+                onChange={(event) =>
+                  setAlignmentToleranceDeg(
+                    clampFloat(
+                      event.target.value,
+                      0.05,
+                      5,
+                      DEFAULT_ALIGNMENT_SEARCH.toleranceDeg,
+                    ),
+                  )
+                }
+                style={NUMBER_INPUT_STYLE}
+              />
+            </label>
+          </div>
           <div style={ROW_STYLE}>
-            Ricerca da {formatLocalDateTime(effectiveDate)} · finestra 48 h · passo 5′ ·
-            tolleranza 1°
+            Ricerca da {formatLocalDateTime(effectiveDate)} · max{' '}
+            {DEFAULT_ALIGNMENT_SEARCH.maxResults} risultati
           </div>
           {alignmentNote !== null && <div style={ROW_STYLE}>{alignmentNote}</div>}
           {alignmentNote === null && alignmentResults.length === 0 && (
