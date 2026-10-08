@@ -2,7 +2,7 @@
 
 Web app per pianificare fotografie della Luna in allineamento con edifici, monumenti e paesaggio reale, usando CesiumJS, Google Photorealistic 3D Tiles e calcoli astronomici topocentrici.
 
-> Stato: **Fase 3 completata** (T-012…T-015): Luna topocentrica verificata contro JPL Horizons (scarti: ~4″ angolo, ~4·10⁻⁵° su diametro), UI data/ora + slider ±12h. Live: https://verbavolant.github.io/lunar-photo-planner/ — in attesa di approvazione per la Fase 4 (rendering Luna in scena).
+> Stato: **Fase 4 in corso** (T-016…T-019): Luna renderizzata in scena con posa e dimensione dai dati topocentrici reali, bottone "Vista Luna" (camera sull'Osservatore rivolta verso la Luna), orologio della scena sincronizzato col tempo della UI, ricerca dei prossimi allineamenti Luna ↔ linea Observer→Target. Fasi 2–3 approvate. Live: https://verbavolant.github.io/lunar-photo-planner/
 
 ## Obiettivo
 Permettere al fotografo di scegliere un soggetto e capire dove posizionarsi, quando scattare, quale focale usare e come apparirà la Luna rispetto al soggetto.

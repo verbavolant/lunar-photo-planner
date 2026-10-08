@@ -3,6 +3,7 @@ import {
   browserTimeZone,
   dateToLocalInputValue,
   effectiveTimeMs,
+  formatLocalDateTime,
   localInputValueToMs,
 } from './time'
 
@@ -26,5 +27,12 @@ describe('effectiveTimeMs', () => {
 describe('browserTimeZone', () => {
   it('restituisce un identificatore non vuoto', () => {
     expect(browserTimeZone().length).toBeGreaterThan(0)
+  })
+})
+
+describe('formatLocalDateTime', () => {
+  it('formato "g/m/aaaa hh:mm" locale, deterministico (nessun Intl)', () => {
+    expect(formatLocalDateTime(new Date(2026, 0, 21, 13, 5))).toBe('21/1/2026 13:05')
+    expect(formatLocalDateTime(new Date(2026, 0, 21, 9, 5))).toBe('21/1/2026 09:05')
   })
 })

@@ -122,3 +122,47 @@ export function verticalAngleDeg(observer: GeoPoint, target: GeoPoint): number {
   )
   return (Math.asin(Cartesian3.dot(direction, localUp)) * 180) / Math.PI
 }
+
+/**
+ * Azimut della linea d'aria (corda 3D) Observer→Target nel piano orizzontale
+ * locale dell'Observer: 0 = nord, 90 = est, range [0, 360). È la direzione
+ * orizzontale del RAGGIO visivo diretto (corda nello spazio), non l'azimut
+ * iniziale della geodetica: su linee corte coincidono entro una frazione di
+ * grado, poi divergono con la curvatura del percorso superficiale. La
+ * verticale locale è la normale all'ellissoide, come in verticalAngleDeg.
+ * Frame locale ENU: est = z_mondo × verticale, nord = verticale × est
+ * (verificato numericamente in geodesy.test.ts).
+ * @throws Error se Observer e Target coincidono (direzione indefinita).
+ */
+export function lineOfSightAzimuthDeg(observer: GeoPoint, target: GeoPoint): number {
+  const observerPos = Cartesian3.fromDegrees(
+    observer.longitudeDeg,
+    observer.latitudeDeg,
+    observer.heightM,
+  )
+  const targetPos = Cartesian3.fromDegrees(
+    target.longitudeDeg,
+    target.latitudeDeg,
+    target.heightM,
+  )
+  const direction = Cartesian3.subtract(targetPos, observerPos, new Cartesian3())
+  if (Cartesian3.magnitude(direction) === 0) {
+    throw new Error('Observer e Target coincidono: azimut della linea di vista indefinito.')
+  }
+  Cartesian3.normalize(direction, direction)
+  const localUp = Ellipsoid.WGS84.geodeticSurfaceNormalCartographic(
+    toCartographic(observer),
+    new Cartesian3(),
+  )
+  const worldZ = new Cartesian3(0, 0, 1)
+  const east = Cartesian3.cross(worldZ, localUp, new Cartesian3())
+  if (Cartesian3.magnitude(east) === 0) {
+    throw new Error('Observer ai poli: piano orizzontale indefinito.')
+  }
+  Cartesian3.normalize(east, east)
+  const north = Cartesian3.cross(localUp, east, new Cartesian3())
+  Cartesian3.normalize(north, north)
+  return radiansToAzimuthDeg(
+    Math.atan2(Cartesian3.dot(direction, east), Cartesian3.dot(direction, north)),
+  )
+}

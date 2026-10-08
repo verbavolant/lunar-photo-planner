@@ -5,14 +5,20 @@ import { flyToObserverView, flyToOverhead } from './cesium/camera'
 import { moonTopocentric } from './astronomy/moon'
 import { DEMO_VIEW, PLANNER_POINT_LABELS, type PlannerPointId } from './planning/points'
 import { buildMeasurements, type MeasurementRow } from './planning/measurements'
+import {
+  DEFAULT_ALIGNMENT_SEARCH,
+  searchMoonAlignments,
+  type AlignmentCandidate,
+} from './planning/alignment'
 import { formatAngleDeg, formatDistanceM } from './planning/format'
 import {
   browserTimeZone,
   dateToLocalInputValue,
   effectiveTimeMs,
+  formatLocalDateTime,
   localInputValueToMs,
 } from './planning/time'
-import type { GeoPoint } from './geodesy/geodesy'
+import { lineOfSightAzimuthDeg, verticalAngleDeg, type GeoPoint } from './geodesy/geodesy'
 
 const COLUMN_STYLE = {
   position: 'absolute' as const,
@@ -83,6 +89,40 @@ const DIVIDER_STYLE = {
   borderTop: '1px solid #456',
 }
 
+const ALIGNMENT_WINDOW_STYLE = {
+  position: 'absolute' as const,
+  top: 12,
+  right: 12,
+  zIndex: 10,
+  display: 'grid',
+  gap: 6,
+  padding: '8px 12px',
+  borderRadius: 6,
+  backgroundColor: 'rgba(20, 20, 30, 0.85)',
+  color: '#f5f5f5',
+  fontFamily: 'sans-serif',
+  fontSize: 13,
+  colorScheme: 'dark' as const,
+  minWidth: 360,
+  maxWidth: 'calc(100% - 24px)',
+  maxHeight: '80%',
+  overflowY: 'auto' as const,
+}
+
+const WINDOW_HEADER_STYLE = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: 8,
+  fontWeight: 600 as const,
+}
+
+const ALIGNMENT_ROW_BUTTON_STYLE = {
+  ...BUTTON_STYLE,
+  textAlign: 'left' as const,
+  whiteSpace: 'nowrap' as const,
+}
+
 // Coordinate leggibili in gradi decimali con emisfero e quota in metri.
 function formatPoint(point: GeoPoint): string {
   const latitudeAbs = Math.abs(point.latitudeDeg).toFixed(6)
@@ -92,6 +132,19 @@ function formatPoint(point: GeoPoint): string {
   return `${latitudeAbs}°${latitudeHemisphere} ${longitudeAbs}°${longitudeHemisphere} · ${point.heightM.toFixed(0)} m`
 }
 
+/** Offset rispetto alla linea di vista in italiano, con segno esplicito. */
+function describeAlignmentOffsets(candidate: AlignmentCandidate): string {
+  const horizontal =
+    Math.abs(candidate.horizontalOffsetDeg) < 0.005
+      ? 'in azimut'
+      : `${formatAngleDeg(Math.abs(candidate.horizontalOffsetDeg), 2)} ${candidate.horizontalOffsetDeg > 0 ? 'a destra' : 'a sinistra'}`
+  const vertical =
+    Math.abs(candidate.verticalOffsetDeg) < 0.005
+      ? 'in quota'
+      : `${formatAngleDeg(Math.abs(candidate.verticalOffsetDeg), 2)} ${candidate.verticalOffsetDeg > 0 ? 'sopra' : 'sotto'}`
+  return `${horizontal} · ${vertical}`
+}
+
 export default function App() {
   const [observer, setObserver] = useState<GeoPoint | null>(null)
   const [target, setTarget] = useState<GeoPoint | null>(null)
@@ -99,6 +152,9 @@ export default function App() {
   const viewerRef = useRef<Viewer | null>(null)
   const [baseDateMs, setBaseDateMs] = useState<number>(() => Date.now())
   const [sliderOffsetMin, setSliderOffsetMin] = useState(0)
+  const [alignmentWindowOpen, setAlignmentWindowOpen] = useState(false)
+  const [alignmentResults, setAlignmentResults] = useState<AlignmentCandidate[]>([])
+  const [alignmentNote, setAlignmentNote] = useState<string | null>(null)
   const effectiveDate = new Date(effectiveTimeMs(baseDateMs, sliderOffsetMin))
 
   const points: Record<PlannerPointId, GeoPoint | null> = { observer, target }
@@ -149,6 +205,40 @@ export default function App() {
     flyToObserverView(viewer, observer, moon.azimuthDeg, moon.altitudeDeg)
   }
 
+  function openAlignmentWindow(): void {
+    if (observer === null || target === null) {
+      return
+    }
+    let losAzimuth: number
+    let losAltitude: number
+    try {
+      losAzimuth = lineOfSightAzimuthDeg(observer, target)
+      losAltitude = verticalAngleDeg(observer, target)
+    } catch {
+      setAlignmentNote('Linea di vista indefinita: Observer e Target coincidono.')
+      setAlignmentResults([])
+      setAlignmentWindowOpen(true)
+      return
+    }
+    setAlignmentNote(null)
+    setAlignmentResults(
+      searchMoonAlignments({
+        observer,
+        losAzimuthDeg: losAzimuth,
+        losAltitudeDeg: losAltitude,
+        fromDateMs: effectiveDate.getTime(),
+        ...DEFAULT_ALIGNMENT_SEARCH,
+      }),
+    )
+    setAlignmentWindowOpen(true)
+  }
+
+  function adoptAlignment(dateMs: number): void {
+    setBaseDateMs(dateMs)
+    setSliderOffsetMin(0)
+    setAlignmentWindowOpen(false)
+  }
+
   return (
     <>
       <CesiumViewer
@@ -195,6 +285,14 @@ export default function App() {
           title="Camera sull'Osservatore rivolta verso la Luna (posa reale)"
         >
           Vista Luna
+        </button>
+        <button
+          onClick={openAlignmentWindow}
+          style={BUTTON_STYLE}
+          disabled={observer === null || target === null}
+          title="Cerca i prossimi istanti in cui la Luna passa sulla linea Observer→Target"
+        >
+          Allineamenti Luna
         </button>
         </div>
         <div style={CARD_STYLE}>
@@ -264,6 +362,39 @@ export default function App() {
           </div>
         )}
       </div>
+      {alignmentWindowOpen && (
+        <div style={ALIGNMENT_WINDOW_STYLE}>
+          <div style={WINDOW_HEADER_STYLE}>
+            <span>Luna sulla linea Observer→Target</span>
+            <button
+              onClick={() => setAlignmentWindowOpen(false)}
+              style={BUTTON_STYLE}
+              title="Chiude la finestra"
+            >
+              ×
+            </button>
+          </div>
+          <div style={ROW_STYLE}>
+            Ricerca da {formatLocalDateTime(effectiveDate)} · finestra 48 h · passo 5′ ·
+            tolleranza 1°
+          </div>
+          {alignmentNote !== null && <div style={ROW_STYLE}>{alignmentNote}</div>}
+          {alignmentNote === null && alignmentResults.length === 0 && (
+            <div style={ROW_STYLE}>Nessun allineamento nella finestra cercata.</div>
+          )}
+          {alignmentResults.map((candidate) => (
+            <button
+              key={candidate.dateMs}
+              onClick={() => adoptAlignment(candidate.dateMs)}
+              style={ALIGNMENT_ROW_BUTTON_STYLE}
+              title="Adotta questo istante come data/ora della vista"
+            >
+              {formatLocalDateTime(new Date(candidate.dateMs))} · sep{' '}
+              {formatAngleDeg(candidate.separationDeg, 2)} · {describeAlignmentOffsets(candidate)}
+            </button>
+          ))}
+        </div>
+      )}
     </>
   )
 }

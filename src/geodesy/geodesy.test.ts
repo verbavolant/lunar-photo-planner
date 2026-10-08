@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   heightDifferenceM,
   inverseGeodesic,
+  lineOfSightAzimuthDeg,
   straightDistanceM,
   verticalAngleDeg,
   type GeoPoint,
@@ -163,5 +164,61 @@ describe("verticalAngleDeg — elevazione rispetto all'orizzonte locale", () => 
       { latitudeDeg: ONE_KM_NORTH_LAT_DEG, longitudeDeg: 0, heightM: 500 },
     )
     expect(Math.abs(elevation - (Math.atan(0.5) * 180) / Math.PI)).toBeLessThan(0.01)
+  })
+})
+
+describe("lineOfSightAzimuthDeg — azimut orizzontale della corda 3D Observer→Target", () => {
+  const OBSERVER_45_10: GeoPoint = { latitudeDeg: 45, longitudeDeg: 10, heightM: 0 }
+
+  /** Differenza circolare tra azimut in [0, 180], robusta al wrap 0/360. */
+  function circularDifferenceDeg(a: number, b: number): number {
+    return Math.abs(((a - b + 540) % 360) - 180)
+  }
+
+  it('Target sullo stesso meridiano: 0° a nord, 180° a sud (la corda resta nel piano meridiano)', () => {
+    // Il confronto è circolare: il rumore float sul prodotto vettoriale può
+    // dare 359,99999999999° invece di 0°.
+    const north = lineOfSightAzimuthDeg(
+      OBSERVER_45_10,
+      { latitudeDeg: 45.01, longitudeDeg: 10, heightM: 0 },
+    )
+    expect(circularDifferenceDeg(north, 0)).toBeLessThan(1e-9)
+    const south = lineOfSightAzimuthDeg(
+      OBSERVER_45_10,
+      { latitudeDeg: 44.99, longitudeDeg: 10, heightM: 0 },
+    )
+    expect(circularDifferenceDeg(south, 180)).toBeLessThan(1e-9)
+  })
+
+  it('Target alla stessa latitudine: ~90° a est, ~270° a ovest (sagitta della corda del parallelo)', () => {
+    // La corda tra due punti dello stesso parallelo passa all'interno del
+    // parallelo: a lat 45° e Δlon 0,02° la deviazione misurata è ~0,007°
+    // (geometria reale, non errore numerico); tolleranza 0,02°.
+    const east = lineOfSightAzimuthDeg(
+      OBSERVER_45_10,
+      { latitudeDeg: 45, longitudeDeg: 10.02, heightM: 0 },
+    )
+    expect(circularDifferenceDeg(east, 90)).toBeLessThan(0.02)
+    const west = lineOfSightAzimuthDeg(
+      OBSERVER_45_10,
+      { latitudeDeg: 45, longitudeDeg: 9.98, heightM: 0 },
+    )
+    expect(circularDifferenceDeg(west, 270)).toBeLessThan(0.02)
+  })
+
+  it('Target a nordest: coerente col rapporto metrico lat/lon entro 0,15°', () => {
+    // Δlat = Δlon = 0,01°: riferimento sferico atan2(cos 45°, 1) ≈ 35,26°;
+    // la metrica WGS84 (gradi di lon più corti a lat 45) e la sagitta della
+    // corda spostano il valore reale di ~0,1°: tolleranza 0,15°.
+    const azimuth = lineOfSightAzimuthDeg(
+      OBSERVER_45_10,
+      { latitudeDeg: 45.01, longitudeDeg: 10.01, heightM: 0 },
+    )
+    const sphericalReference = (Math.atan2(Math.cos((45 * Math.PI) / 180), 1) * 180) / Math.PI
+    expect(Math.abs(azimuth - sphericalReference)).toBeLessThan(0.15)
+  })
+
+  it('punti coincidenti: errore esplicito', () => {
+    expect(() => lineOfSightAzimuthDeg(OBSERVER_45_10, OBSERVER_45_10)).toThrow(/coincidono/)
   })
 })
