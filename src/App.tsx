@@ -18,6 +18,7 @@ import {
   effectiveTimeMs,
   formatLocalDateTime,
   localInputValueToMs,
+  localUtcOffsetLabel,
 } from './planning/time'
 import { lineOfSightAzimuthDeg, verticalAngleDeg, type GeoPoint } from './geodesy/geodesy'
 
@@ -380,6 +381,13 @@ export default function App() {
             />
           </label>
           <div style={TIME_ROW_STYLE}>
+            <button
+              onClick={() => setBaseDateMs(baseDateMs - 60_000)}
+              style={BUTTON_STYLE}
+              title="Indietro di 1 minuto (non muove lo slider)"
+            >
+              −1 min
+            </button>
             <input
               type="range"
               min={-720}
@@ -390,6 +398,13 @@ export default function App() {
               style={{ width: 220 }}
               aria-label="Scostamento temporale in minuti"
             />
+            <button
+              onClick={() => setBaseDateMs(baseDateMs + 60_000)}
+              style={BUTTON_STYLE}
+              title="Avanti di 1 minuto (non muove lo slider)"
+            >
+              +1 min
+            </button>
             <span>
               {sliderOffsetMin >= 0 ? '+' : ''}
               {sliderOffsetMin} min
@@ -406,6 +421,8 @@ export default function App() {
           </div>
           <div style={ROW_STYLE}>
             Tempo effettivo (UTC): {effectiveDate.toISOString().replace('T', ' ').slice(0, 19)} UTC
+            · ora locale {localUtcOffsetLabel(effectiveDate)} (con ora legale/solare del fuso{' '}
+            {browserTimeZone()})
           </div>
         </div>
         {(observer !== null || target !== null) && (
