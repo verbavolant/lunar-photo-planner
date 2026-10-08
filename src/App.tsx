@@ -366,21 +366,21 @@ export default function App() {
         </button>
         </div>
         <div style={CARD_STYLE}>
-          <label style={ROW_STYLE}>
-            Data/ora (fuso: {browserTimeZone()})
-            <input
-              type="datetime-local"
-              value={dateToLocalInputValue(new Date(baseDateMs))}
-              onChange={(event) => {
-                const ms = localInputValueToMs(event.target.value)
-                if (!Number.isNaN(ms)) {
-                  setBaseDateMs(ms)
-                  setSliderOffsetMin(0)
-                }
-              }}
-            />
-          </label>
           <div style={TIME_ROW_STYLE}>
+            <label style={ROW_STYLE}>
+              Data/ora (fuso: {browserTimeZone()})
+              <input
+                type="datetime-local"
+                value={dateToLocalInputValue(new Date(baseDateMs))}
+                onChange={(event) => {
+                  const ms = localInputValueToMs(event.target.value)
+                  if (!Number.isNaN(ms)) {
+                    setBaseDateMs(ms)
+                    setSliderOffsetMin(0)
+                  }
+                }}
+              />
+            </label>
             <button
               onClick={() => setBaseDateMs(baseDateMs - 60_000)}
               style={BUTTON_STYLE}
@@ -388,6 +388,15 @@ export default function App() {
             >
               −1 min
             </button>
+            <button
+              onClick={() => setBaseDateMs(baseDateMs + 60_000)}
+              style={BUTTON_STYLE}
+              title="Avanti di 1 minuto (non muove lo slider)"
+            >
+              +1 min
+            </button>
+          </div>
+          <div style={TIME_ROW_STYLE}>
             <input
               type="range"
               min={-720}
@@ -398,13 +407,6 @@ export default function App() {
               style={{ width: 220 }}
               aria-label="Scostamento temporale in minuti"
             />
-            <button
-              onClick={() => setBaseDateMs(baseDateMs + 60_000)}
-              style={BUTTON_STYLE}
-              title="Avanti di 1 minuto (non muove lo slider)"
-            >
-              +1 min
-            </button>
             <span>
               {sliderOffsetMin >= 0 ? '+' : ''}
               {sliderOffsetMin} min
