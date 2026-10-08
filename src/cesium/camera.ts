@@ -21,9 +21,11 @@ export function flyToOverhead(viewer: Viewer, view: OverheadView, durationSecond
 }
 
 /**
- * "Occhio del fotografo": camera ~2 m sopra la superficie dell'Observer,
- * rivolta nella direzione indicata. heading = azimut reale in gradi (0 = nord,
- * orario), pitch = angolo verticale reale in gradi (positivo sopra l'orizzonte).
+ * "Occhio del fotografo": camera 1 m sopra la superficie dell'Observer
+ * (T-028, richiesta umano: con la camera più in alto, abbassando la vista
+ * si finisce sotto la mesh dei tiles), rivolta nella direzione indicata.
+ * heading = azimut reale in gradi (0 = nord, orario), pitch = angolo
+ * verticale reale in gradi (positivo sopra l'orizzonte).
  * I valori devono derivare dai dati reali (es. moonTopocentric).
  */
 export function flyToObserverView(
@@ -37,7 +39,7 @@ export function flyToObserverView(
     destination: Cartesian3.fromDegrees(
       observer.longitudeDeg,
       observer.latitudeDeg,
-      observer.heightM + 2,
+      observer.heightM + 1,
     ),
     orientation: {
       heading: (headingDeg * Math.PI) / 180,
