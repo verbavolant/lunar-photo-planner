@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import type { Viewer } from 'cesium'
 import CesiumViewer from './cesium/CesiumViewer'
-import { flyToOverhead } from './cesium/camera'
+import { flyToObserverView, flyToOverhead } from './cesium/camera'
 import { moonTopocentric } from './astronomy/moon'
 import { DEMO_VIEW, PLANNER_POINT_LABELS, type PlannerPointId } from './planning/points'
 import { buildMeasurements, type MeasurementRow } from './planning/measurements'
@@ -137,6 +137,18 @@ export default function App() {
     flyToOverhead(viewer, DEMO_VIEW)
   }
 
+  function flyToMoonView(): void {
+    if (observer === null) {
+      return
+    }
+    const viewer = viewerRef.current
+    if (viewer === null || viewer.isDestroyed()) {
+      return
+    }
+    const moon = moonTopocentric(observer, effectiveDate)
+    flyToObserverView(viewer, observer, moon.azimuthDeg, moon.altitudeDeg)
+  }
+
   return (
     <>
       <CesiumViewer
@@ -176,6 +188,13 @@ export default function App() {
           title="Vista demo: 45,5°N 10,22°E, scala ≈ 1 km/cm"
         >
           Demo vista
+        </button>
+        <button
+          onClick={flyToMoonView}
+          style={BUTTON_STYLE}
+          title="Camera sull'Osservatore rivolta verso la Luna (posa reale)"
+        >
+          Vista Luna
         </button>
         </div>
         <div style={CARD_STYLE}>

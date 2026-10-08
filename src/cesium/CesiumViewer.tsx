@@ -7,6 +7,7 @@ import {
   Cartesian2,
   Cartesian3,
   Color,
+  JulianDate,
   ScreenSpaceEventHandler,
   ScreenSpaceEventType,
   Viewer,
@@ -76,6 +77,13 @@ export default function CesiumViewer({
     moonRenderRef.current = {
       observer,
       moon: observer === null ? null : moonTopocentric(observer, time),
+    }
+    // Sincronizza l'orologio interno della scena: il Sole e l'illuminazione dei
+    // tiles seguono il tempo della UI, non l'ora di sistema.
+    const viewer = viewerRef.current
+    if (viewer !== null) {
+      viewer.clock.currentTime = JulianDate.fromDate(time)
+      viewer.clock.shouldAnimate = false
     }
   }, [observer, time])
 
