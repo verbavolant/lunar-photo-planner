@@ -22,16 +22,17 @@ import {
 } from './planning/time'
 import { lineOfSightAzimuthDeg, verticalAngleDeg, type GeoPoint } from './geodesy/geodesy'
 
-const COLUMN_STYLE = {
-  position: 'absolute' as const,
-  top: 12,
-  left: 12,
-  zIndex: 10,
+// Layout a pagina (T-027): l'UI non copre più la scena — toolbar sopra la vista,
+// card Tempo sotto, box dati/allineamenti a sinistra. Così il canvas non ha zone
+// morte: drag/zoom/click funzionano su tutta la sua area.
+const ROOT_STYLE = {
   display: 'flex',
   flexDirection: 'column' as const,
-  alignItems: 'flex-start' as const,
-  gap: 8,
-  maxWidth: 'calc(100% - 24px)',
+  height: '100vh',
+  backgroundColor: '#14141e',
+  color: '#f5f5f5',
+  fontFamily: 'sans-serif',
+  fontSize: 13,
 }
 
 const TOOLBAR_STYLE = {
@@ -39,12 +40,36 @@ const TOOLBAR_STYLE = {
   flexWrap: 'wrap' as const,
   alignItems: 'center',
   gap: 8,
-  padding: '6px 10px',
-  borderRadius: 6,
-  backgroundColor: 'rgba(20, 20, 30, 0.85)',
-  color: '#f5f5f5',
-  fontFamily: 'sans-serif',
-  fontSize: 13,
+  padding: '8px 12px',
+  flexShrink: 0,
+}
+
+const MAIN_ROW_STYLE = {
+  display: 'flex',
+  flex: 1,
+  minHeight: 0,
+}
+
+const SIDEBAR_STYLE = {
+  display: 'flex',
+  flexDirection: 'column' as const,
+  gap: 8,
+  width: 380,
+  flexShrink: 0,
+  padding: 8,
+  overflowY: 'auto' as const,
+}
+
+const SIDEBAR_HINT_STYLE = {
+  color: '#9aa3b5',
+  fontSize: 12,
+  padding: '8px 12px',
+}
+
+const VIEW_CONTAINER_STYLE = {
+  position: 'relative' as const,
+  flex: 1,
+  minWidth: 0,
 }
 
 const BUTTON_STYLE = {
@@ -74,6 +99,13 @@ const CARD_STYLE = {
   colorScheme: 'dark' as const,
 }
 
+// Card Tempo: fascia a tutta larghezza sotto la vista (T-027).
+const TEMPO_CARD_STYLE = {
+  ...CARD_STYLE,
+  borderRadius: 0,
+  flexShrink: 0,
+}
+
 const ROW_STYLE = {
   whiteSpace: 'nowrap' as const,
 }
@@ -91,11 +123,8 @@ const DIVIDER_STYLE = {
   borderTop: '1px solid #456',
 }
 
+// Finestra Allineamenti: card del box laterale, non più overlay sulla scena.
 const ALIGNMENT_WINDOW_STYLE = {
-  position: 'absolute' as const,
-  top: 12,
-  right: 12,
-  zIndex: 10,
   display: 'grid',
   gap: 6,
   padding: '8px 12px',
@@ -105,10 +134,6 @@ const ALIGNMENT_WINDOW_STYLE = {
   fontFamily: 'sans-serif',
   fontSize: 13,
   colorScheme: 'dark' as const,
-  minWidth: 360,
-  maxWidth: 'calc(100% - 24px)',
-  maxHeight: '80%',
-  overflowY: 'auto' as const,
 }
 
 const WINDOW_HEADER_STYLE = {
@@ -302,18 +327,8 @@ export default function App() {
   }
 
   return (
-    <>
-      <CesiumViewer
-        observer={observer}
-        target={target}
-        time={effectiveDate}
-        onScenePick={handleScenePick}
-        onViewerReady={(viewer) => {
-          viewerRef.current = viewer
-        }}
-      />
-      <div style={COLUMN_STYLE}>
-        <div style={TOOLBAR_STYLE}>
+    <div style={ROOT_STYLE}>
+      <div style={TOOLBAR_STYLE}>
         {(['observer', 'target'] as const).map((id) => {
           const point = points[id]
           return (
@@ -364,184 +379,206 @@ export default function App() {
         >
           Allineamenti Luna
         </button>
-        </div>
-        <div style={CARD_STYLE}>
-          <div style={TIME_ROW_STYLE}>
-            <label style={ROW_STYLE}>
-              Data/ora (fuso: {browserTimeZone()})
-              <input
-                type="datetime-local"
-                value={dateToLocalInputValue(new Date(baseDateMs))}
-                onChange={(event) => {
-                  const ms = localInputValueToMs(event.target.value)
-                  if (!Number.isNaN(ms)) {
-                    setBaseDateMs(ms)
-                    setSliderOffsetMin(0)
-                  }
-                }}
-              />
-            </label>
-            <button
-              onClick={() => setBaseDateMs(baseDateMs - 60_000)}
-              style={BUTTON_STYLE}
-              title="Indietro di 1 minuto (non muove lo slider)"
-            >
-              −1 min
-            </button>
-            <button
-              onClick={() => setBaseDateMs(baseDateMs + 60_000)}
-              style={BUTTON_STYLE}
-              title="Avanti di 1 minuto (non muove lo slider)"
-            >
-              +1 min
-            </button>
-          </div>
-          <div style={TIME_ROW_STYLE}>
-            <input
-              type="range"
-              min={-720}
-              max={720}
-              step={5}
-              value={sliderOffsetMin}
-              onChange={(event) => setSliderOffsetMin(Number(event.target.value))}
-              style={{ width: 220 }}
-              aria-label="Scostamento temporale in minuti"
-            />
-            <span>
-              {sliderOffsetMin >= 0 ? '+' : ''}
-              {sliderOffsetMin} min
-            </span>
-            <button
-              onClick={() => {
-                setBaseDateMs(Date.now())
-                setSliderOffsetMin(0)
-              }}
-              style={BUTTON_STYLE}
-            >
-              Adesso
-            </button>
-          </div>
-          <div style={ROW_STYLE}>
-            Tempo effettivo (UTC): {effectiveDate.toISOString().replace('T', ' ').slice(0, 19)} UTC
-            · ora locale {localUtcOffsetLabel(effectiveDate)} (con ora legale/solare del fuso{' '}
-            {browserTimeZone()})
-          </div>
-        </div>
-        {(observer !== null || target !== null) && (
-          <div style={CARD_STYLE}>
-            {observer !== null && target !== null && (
-              <>
-                {buildMeasurements(observer, target).map((row) => (
-                  <div key={row.label} style={ROW_STYLE}>
-                    {row.label}: <strong>{row.value}</strong>
-                  </div>
-                ))}
-                <hr style={DIVIDER_STYLE} />
-              </>
-            )}
-            {observer !== null && buildMoonRows(observer).map((row) => (
-              <div key={row.label} style={ROW_STYLE}>
-                {row.label}: <strong>{row.value}</strong>
-              </div>
-            ))}
-            {observer === null && target !== null && (
-              <div style={ROW_STYLE}>Posiziona l'Osservatore per i valori della Luna.</div>
-            )}
-          </div>
-        )}
       </div>
-      {alignmentWindowOpen && (
-        <div style={ALIGNMENT_WINDOW_STYLE}>
-          <div style={WINDOW_HEADER_STYLE}>
-            <span>Luna sulla linea Observer→Target</span>
-            <button
-              onClick={runAlignmentSearch}
-              style={BUTTON_STYLE}
-              title="Ripete la ricerca con i parametri e il tempo attuali"
-            >
-              Ricalcola
-            </button>
-            <button
-              onClick={() => setAlignmentWindowOpen(false)}
-              style={BUTTON_STYLE}
-              title="Chiude la finestra"
-            >
-              ×
-            </button>
-          </div>
-          <div style={WINDOW_PARAMS_STYLE}>
-            <label style={PARAM_LABEL_STYLE}>
-              Finestra (giorni)
-              <input
-                type="number"
-                min={1}
-                max={365}
-                value={alignmentDays}
-                onChange={(event) =>
-                  setAlignmentDays(clampInt(event.target.value, 1, 365, DEFAULT_ALIGNMENT_DAYS))
-                }
-                style={NUMBER_INPUT_STYLE}
-              />
-            </label>
-            <label style={PARAM_LABEL_STYLE}>
-              Passo (min)
-              <input
-                type="number"
-                min={1}
-                max={60}
-                value={alignmentStepMin}
-                onChange={(event) =>
-                  setAlignmentStepMin(
-                    clampInt(event.target.value, 1, 60, DEFAULT_ALIGNMENT_SEARCH.stepMinutes),
-                  )
-                }
-                style={NUMBER_INPUT_STYLE}
-              />
-            </label>
-            <label style={PARAM_LABEL_STYLE}>
-              Tolleranza (°)
-              <input
-                type="number"
-                min={0.05}
-                max={5}
-                step={0.05}
-                value={alignmentToleranceDeg}
-                onChange={(event) =>
-                  setAlignmentToleranceDeg(
-                    clampFloat(
-                      event.target.value,
-                      0.05,
-                      5,
-                      DEFAULT_ALIGNMENT_SEARCH.toleranceDeg,
-                    ),
-                  )
-                }
-                style={NUMBER_INPUT_STYLE}
-              />
-            </label>
-          </div>
-          <div style={ROW_STYLE}>
-            Ricerca da {formatLocalDateTime(effectiveDate)} · max{' '}
-            {DEFAULT_ALIGNMENT_SEARCH.maxResults} risultati
-          </div>
-          {alignmentNote !== null && <div style={ROW_STYLE}>{alignmentNote}</div>}
-          {alignmentNote === null && alignmentResults.length === 0 && (
-            <div style={ROW_STYLE}>Nessun allineamento nella finestra cercata.</div>
+      <div style={MAIN_ROW_STYLE}>
+        <div style={SIDEBAR_STYLE}>
+          {observer === null && target === null && (
+            <div style={SIDEBAR_HINT_STYLE}>
+              Clicca sulla scena per posizionare Observer e Target: qui compaiono i dati.
+            </div>
           )}
-          {alignmentResults.map((candidate) => (
-            <button
-              key={candidate.dateMs}
-              onClick={() => adoptAlignment(candidate.dateMs)}
-              style={ALIGNMENT_ROW_BUTTON_STYLE}
-              title="Adotta questo istante come data/ora della vista"
-            >
-              {formatLocalDateTime(new Date(candidate.dateMs))} · sep{' '}
-              {formatAngleDeg(candidate.separationDeg, 2)} · {describeAlignmentOffsets(candidate)}
-            </button>
-          ))}
+          {(observer !== null || target !== null) && (
+            <div style={CARD_STYLE}>
+              {observer !== null && target !== null && (
+                <>
+                  {buildMeasurements(observer, target).map((row) => (
+                    <div key={row.label} style={ROW_STYLE}>
+                      {row.label}: <strong>{row.value}</strong>
+                    </div>
+                  ))}
+                  <hr style={DIVIDER_STYLE} />
+                </>
+              )}
+              {observer !== null && buildMoonRows(observer).map((row) => (
+                <div key={row.label} style={ROW_STYLE}>
+                  {row.label}: <strong>{row.value}</strong>
+                </div>
+              ))}
+              {observer === null && target !== null && (
+                <div style={ROW_STYLE}>Posiziona l'Osservatore per i valori della Luna.</div>
+              )}
+            </div>
+          )}
+          {alignmentWindowOpen && (
+            <div style={ALIGNMENT_WINDOW_STYLE}>
+              <div style={WINDOW_HEADER_STYLE}>
+                <span>Luna sulla linea Observer→Target</span>
+                <button
+                  onClick={runAlignmentSearch}
+                  style={BUTTON_STYLE}
+                  title="Ripete la ricerca con i parametri e il tempo attuali"
+                >
+                  Ricalcola
+                </button>
+                <button
+                  onClick={() => setAlignmentWindowOpen(false)}
+                  style={BUTTON_STYLE}
+                  title="Chiude la finestra"
+                >
+                  ×
+                </button>
+              </div>
+              <div style={WINDOW_PARAMS_STYLE}>
+                <label style={PARAM_LABEL_STYLE}>
+                  Finestra (giorni)
+                  <input
+                    type="number"
+                    min={1}
+                    max={365}
+                    value={alignmentDays}
+                    onChange={(event) =>
+                      setAlignmentDays(
+                        clampInt(event.target.value, 1, 365, DEFAULT_ALIGNMENT_DAYS),
+                      )
+                    }
+                    style={NUMBER_INPUT_STYLE}
+                  />
+                </label>
+                <label style={PARAM_LABEL_STYLE}>
+                  Passo (min)
+                  <input
+                    type="number"
+                    min={1}
+                    max={60}
+                    value={alignmentStepMin}
+                    onChange={(event) =>
+                      setAlignmentStepMin(
+                        clampInt(event.target.value, 1, 60, DEFAULT_ALIGNMENT_SEARCH.stepMinutes),
+                      )
+                    }
+                    style={NUMBER_INPUT_STYLE}
+                  />
+                </label>
+                <label style={PARAM_LABEL_STYLE}>
+                  Tolleranza (°)
+                  <input
+                    type="number"
+                    min={0.05}
+                    max={5}
+                    step={0.05}
+                    value={alignmentToleranceDeg}
+                    onChange={(event) =>
+                      setAlignmentToleranceDeg(
+                        clampFloat(
+                          event.target.value,
+                          0.05,
+                          5,
+                          DEFAULT_ALIGNMENT_SEARCH.toleranceDeg,
+                        ),
+                      )
+                    }
+                    style={NUMBER_INPUT_STYLE}
+                  />
+                </label>
+              </div>
+              <div style={ROW_STYLE}>
+                Ricerca da {formatLocalDateTime(effectiveDate)} · max{' '}
+                {DEFAULT_ALIGNMENT_SEARCH.maxResults} risultati
+              </div>
+              {alignmentNote !== null && <div style={ROW_STYLE}>{alignmentNote}</div>}
+              {alignmentNote === null && alignmentResults.length === 0 && (
+                <div style={ROW_STYLE}>Nessun allineamento nella finestra cercata.</div>
+              )}
+              {alignmentResults.map((candidate) => (
+                <button
+                  key={candidate.dateMs}
+                  onClick={() => adoptAlignment(candidate.dateMs)}
+                  style={ALIGNMENT_ROW_BUTTON_STYLE}
+                  title="Adotta questo istante come data/ora della vista"
+                >
+                  {formatLocalDateTime(new Date(candidate.dateMs))} · sep{' '}
+                  {formatAngleDeg(candidate.separationDeg, 2)} ·{' '}
+                  {describeAlignmentOffsets(candidate)}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
-      )}
-    </>
+        <div style={VIEW_CONTAINER_STYLE}>
+          <CesiumViewer
+            observer={observer}
+            target={target}
+            time={effectiveDate}
+            onScenePick={handleScenePick}
+            onViewerReady={(viewer) => {
+              viewerRef.current = viewer
+            }}
+          />
+        </div>
+      </div>
+      <div style={TEMPO_CARD_STYLE}>
+        <div style={TIME_ROW_STYLE}>
+          <label style={ROW_STYLE}>
+            Data/ora (fuso: {browserTimeZone()})
+            <input
+              type="datetime-local"
+              value={dateToLocalInputValue(new Date(baseDateMs))}
+              onChange={(event) => {
+                const ms = localInputValueToMs(event.target.value)
+                if (!Number.isNaN(ms)) {
+                  setBaseDateMs(ms)
+                  setSliderOffsetMin(0)
+                }
+              }}
+            />
+          </label>
+          <button
+            onClick={() => setBaseDateMs(baseDateMs - 60_000)}
+            style={BUTTON_STYLE}
+            title="Indietro di 1 minuto (non muove lo slider)"
+          >
+            −1 min
+          </button>
+          <button
+            onClick={() => setBaseDateMs(baseDateMs + 60_000)}
+            style={BUTTON_STYLE}
+            title="Avanti di 1 minuto (non muove lo slider)"
+          >
+            +1 min
+          </button>
+        </div>
+        <div style={TIME_ROW_STYLE}>
+          <input
+            type="range"
+            min={-720}
+            max={720}
+            step={5}
+            value={sliderOffsetMin}
+            onChange={(event) => setSliderOffsetMin(Number(event.target.value))}
+            style={{ width: 220 }}
+            aria-label="Scostamento temporale in minuti"
+          />
+          <span>
+            {sliderOffsetMin >= 0 ? '+' : ''}
+            {sliderOffsetMin} min
+          </span>
+          <button
+            onClick={() => {
+              setBaseDateMs(Date.now())
+              setSliderOffsetMin(0)
+            }}
+            style={BUTTON_STYLE}
+          >
+            Adesso
+          </button>
+        </div>
+        <div style={ROW_STYLE}>
+          Tempo effettivo (UTC): {effectiveDate.toISOString().replace('T', ' ').slice(0, 19)} UTC
+          · ora locale {localUtcOffsetLabel(effectiveDate)} (con ora legale/solare del fuso{' '}
+          {browserTimeZone()})
+        </div>
+      </div>
+    </div>
   )
 }
 
