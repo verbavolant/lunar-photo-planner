@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import {
   ArcType,
   Cesium3DTileset,
+  CallbackPositionProperty,
+  CallbackProperty,
   Cartesian2,
   Cartesian3,
   Color,
@@ -11,12 +13,16 @@ import {
 } from 'cesium'
 import 'cesium/Build/Cesium/Widgets/widgets.css'
 import { pickPointOnScene } from './pick'
+import { createMoonTexture, moonDiameterM, moonPositionEcef } from './moonRender'
+import { moonTopocentric, type MoonTopocentric } from '../astronomy/moon'
 import type { GeoPoint } from '../geodesy/geodesy'
 import type { PlannerPointId } from '../planning/points'
 
 export interface CesiumViewerProps {
   observer: GeoPoint | null
   target: GeoPoint | null
+  /** Tempo effettivo della UI: guida la posizione apparente della Luna. */
+  time: Date
   onScenePick: (point: GeoPoint) => void
   /** Chiamato dopo la creazione del Viewer (anche nel remount di StrictMode). */
   onViewerReady?: (viewer: Viewer) => void
@@ -47,6 +53,7 @@ const OVERLAY_STYLE = {
 export default function CesiumViewer({
   observer,
   target,
+  time,
   onScenePick,
   onViewerReady,
 }: CesiumViewerProps) {
@@ -57,6 +64,20 @@ export default function CesiumViewer({
   // riferimento aggiornato senza dover essere ricreato.
   const onScenePickRef = useRef(onScenePick)
   onScenePickRef.current = onScenePick
+  // Stato di rendering della Luna: ricalcolato solo quando cambiano Observer o
+  // tempo; i CallbackProperty dell'entità lo leggono a ogni frame (aggiornamento
+  // fluido, senza ricreare l'entità).
+  const moonRenderRef = useRef<{ observer: GeoPoint | null; moon: MoonTopocentric | null }>({
+    observer: null,
+    moon: null,
+  })
+
+  useEffect(() => {
+    moonRenderRef.current = {
+      observer,
+      moon: observer === null ? null : moonTopocentric(observer, time),
+    }
+  }, [observer, time])
 
   useEffect(() => {
     const container = containerRef.current
@@ -84,6 +105,50 @@ export default function CesiumViewer({
 
     viewerRef.current = viewer
     onViewerReady?.(viewer)
+
+    // Luna (T-016/T-017): billboard in posizione reale (azimut/altitudine/distanza
+    // topocentriche da moonTopocentric) e dimensione in METRI dal diametro
+    // angolare reale (sizeInMeters): Cesium la proietta con l'angolo corretto da
+    // qualunque camera. I CallbackProperty leggono il ref: fluidi col tempo.
+    const moonTexture = createMoonTexture()
+    viewer.entities.add({
+      id: 'moon',
+      position: new CallbackPositionProperty(() => {
+        const state = moonRenderRef.current
+        if (state.observer === null || state.moon === null) {
+          return Cartesian3.ZERO
+        }
+        return moonPositionEcef(
+          state.observer,
+          state.moon.azimuthDeg,
+          state.moon.altitudeDeg,
+          state.moon.distanceM,
+        )
+      }, false),
+      billboard: {
+        image: moonTexture,
+        // La visibilità va sul billboard: a livello Entity `show` è solo boolean.
+        show: new CallbackProperty(() => {
+          const state = moonRenderRef.current
+          return state.observer !== null && state.moon !== null
+        }, false),
+        sizeInMeters: true,
+        width: new CallbackProperty(() => {
+          const state = moonRenderRef.current
+          if (state.moon === null) {
+            return 1
+          }
+          return moonDiameterM(state.moon.distanceM, state.moon.angularDiameterDeg)
+        }, false),
+        height: new CallbackProperty(() => {
+          const state = moonRenderRef.current
+          if (state.moon === null) {
+            return 1
+          }
+          return moonDiameterM(state.moon.distanceM, state.moon.angularDiameterDeg)
+        }, false),
+      },
+    })
 
     // Clic sinistro → punto reale sulla superficie (tiles o ellissoide).
     const clickHandler = new ScreenSpaceEventHandler(viewer.scene.canvas)

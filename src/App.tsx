@@ -142,6 +142,7 @@ export default function App() {
       <CesiumViewer
         observer={observer}
         target={target}
+        time={effectiveDate}
         onScenePick={handleScenePick}
         onViewerReady={(viewer) => {
           viewerRef.current = viewer
