@@ -27,7 +27,15 @@ npm run preview    # anteprima della build
 
 Per chi sviluppa con assistenza AI: leggere `AGENTS.md` e i file in `docs/ai/`.
 
-## Configurazione Google 3D Tiles
+## Configurazione della sorgente 3D
+La scena usa di default **Google Photorealistic 3D Tiles**. In alternativa è disponibile **Cesium ion** (Cesium World Terrain + imagery Bing Aerial + Cesium OSM Buildings), utile se l'accesso Google al 3D è limitato o esaurito.
+
+**Scelta del provider:**
+- Default da configurazione: `VITE_SCENE_PROVIDER=google` (o `cesium`) in `.env.local`.
+- Override a runtime senza rebuild: `?provider=google` / `?provider=cesium` nell'URL (comodo per provare entrambe le sorgenti sul sito già pubblicato).
+- Valore non valido: l'app ricade sul default e mostra un avviso a schermo.
+
+### Google Photorealistic 3D Tiles (provider `google`)
 I tiles fotorealistici richiedono una chiave Google Maps Platform con la **Map Tiles API** abilitata:
 
 1. Crea un progetto su Google Cloud e abilita la Map Tiles API.
@@ -42,6 +50,19 @@ I tiles fotorealistici richiedono una chiave Google Maps Platform con la **Map T
 
 Senza chiave l'app resta navigabile (globo vuoto) e mostra un avviso a schermo. L'attribution richiesta dalle Google Map Tiles API Policies è mostrata automaticamente da CesiumJS (`showCreditsOnScreen`). Per il deploy (GitHub Actions) la chiave va passata come secret di build, senza stamparla nei log.
 
+### Cesium ion (provider `cesium`)
+1. Crea un account gratuito su https://ion.cesium.com e un token in **Tokens** (asset consentiti: Cesium World Terrain, Bing Maps Aerial, Cesium OSM Buildings).
+2. Copia `.env.example` in `.env.local` e inserisci:
+
+   ```
+   VITE_CESIUM_ION_TOKEN=il-tuo-token
+   VITE_SCENE_PROVIDER=cesium
+   ```
+
+3. Riavvia il server di sviluppo.
+
+Nota: con Cesium ion la scena mostra terrain reale e edifici volumetrici (OSM Buildings), non la mesh fotorealistica di Google. Il piano gratuito Community di ion prevede 15 GB/mese di streaming e 1.000 sessioni/mese di imagery commerciale (uso individuale, non commerciale). I credit dei dati restano a schermo: requisito dei provider.
+
 ## Deploy su GitHub Pages
 1. Su GitHub crea un repository **vuoto** (senza README/license pregenerati) con branch `main`.
 2. Aggiungi il remote e pubblica:
@@ -52,7 +73,7 @@ Senza chiave l'app resta navigabile (globo vuoto) e mostra un avviso a schermo. 
    ```
 
 3. Nel repository: **Settings → Pages → Build and deployment → Source = GitHub Actions**.
-4. **Settings → Secrets and variables → Actions → New repository secret**: nome `VITE_GOOGLE_MAPS_API_KEY`, valore = la stessa chiave di `.env.local`.
+4. **Settings → Secrets and variables → Actions → New repository secret**: nome `VITE_GOOGLE_MAPS_API_KEY`, valore = la stessa chiave di `.env.local`. Opzionale, per il provider `cesium`: secret `VITE_CESIUM_ION_TOKEN` con il token ion, e in **Variables** `VITE_SCENE_PROVIDER=cesium` per cambiare il provider di default del sito senza toccare il codice (poi rilanciare il workflow da Actions → Run workflow). A runtime il provider si può sempre cambiare con `?provider=google|cesium` nell'URL.
 5. In Google Cloud Console aggiorna la restrizione HTTP referrer della chiave aggiungendo `https://<utente>.github.io/*`.
 6. Il workflow `.github/workflows/deploy-pages.yml` esegue install/typecheck/test/build e pubblica `dist/` a ogni push su `main` (e manualmente da Actions → workflow_dispatch).
 

@@ -7,12 +7,18 @@ import {
   Cartesian2,
   Cartesian3,
   Color,
+  Ion,
+  IonWorldImageryStyle,
   JulianDate,
   ScreenSpaceEventHandler,
   ScreenSpaceEventType,
+  Terrain,
   Viewer,
+  createOsmBuildingsAsync,
+  createWorldImageryAsync,
 } from 'cesium'
 import 'cesium/Build/Cesium/Widgets/widgets.css'
+import { resolveSceneDataProvider } from './dataProvider'
 import { pickPointOnScene } from './pick'
 import { createMoonTexture, moonDiameterM, moonPositionEcef } from './moonRender'
 import { moonTopocentric, type MoonTopocentric } from '../astronomy/moon'
@@ -48,8 +54,18 @@ const OVERLAY_STYLE = {
   pointerEvents: 'none' as const,
 }
 
-// Scena CesiumJS + Google Photorealistic 3D Tiles (T-003). L'attribution dei
-// tiles resta a schermo: requisito delle Google Map Tiles API Policies.
+// Messaggio d'errore leggibile per i notice a schermo (usato dai catch dei
+// caricamenti asincroni del provider attivo).
+function describeError(error: unknown): string {
+  return error instanceof Error && error.message !== ''
+    ? error.message
+    : 'vedi console per i dettagli'
+}
+
+// Scena CesiumJS con sorgente dati 3D configurabile (Fase 5b): Google
+// Photorealistic 3D Tiles (T-003) oppure Cesium ion (World Terrain + Bing
+// Aerial + OSM Buildings). L'attribution resta a schermo: requisito dei
+// provider dei dati (Google Map Tiles API Policies; credit ion/imagery).
 // T-008: il clic posiziona Observer/Target sulla superficie reale.
 export default function CesiumViewer({
   observer,
@@ -96,8 +112,37 @@ export default function CesiumViewer({
     // Evita di toccare il viewer dopo l'unmount (StrictMode: doppio mount).
     let disposed = false
 
+    // Fase 5b: sorgente dati 3D configurabile. Default dall'env
+    // (VITE_SCENE_PROVIDER), override runtime con ?provider= per cambiare
+    // sorgente sul sito già deployato senza rebuild.
+    const sceneProvider = resolveSceneDataProvider(
+      import.meta.env.VITE_SCENE_PROVIDER as string | undefined,
+      new URLSearchParams(window.location.search).get('provider') ?? undefined,
+    )
+    if (sceneProvider.invalidWarning !== null) {
+      setNotice(sceneProvider.invalidWarning)
+    }
+
+    // Ramo 'cesium': il token ion va impostato PRIMA di creare il Viewer
+    // (Terrain e imagery ion lo leggono internamente). Senza token la scena
+    // resta su globo vuoto, con l'avviso a schermo.
+    const ionToken = import.meta.env.VITE_CESIUM_ION_TOKEN as string | undefined
+    const cesiumProviderActive = sceneProvider.provider === 'cesium'
+    const ionConfigured =
+      cesiumProviderActive && ionToken !== undefined && ionToken !== ''
+    if (cesiumProviderActive) {
+      if (!ionConfigured) {
+        setNotice(
+          'Provider "cesium" attivo ma senza token ion: imposta VITE_CESIUM_ION_TOKEN in .env.local (token da https://ion.cesium.com/tokens) e riavvia il server di sviluppo.',
+        )
+      } else {
+        Ion.defaultAccessToken = ionToken
+      }
+    }
+
     const viewer = new Viewer(container, {
-      // Nessun imagery di default: i tiles Google forniscono il territorio.
+      // Nessun imagery di default: lo aggiunge il provider scelto (tiles
+      // Google nel ramo 'google', Bing Aerial via ion nel ramo 'cesium').
       baseLayer: false,
       baseLayerPicker: false,
       geocoder: false,
@@ -109,6 +154,10 @@ export default function CesiumViewer({
       fullscreenButton: false,
       infoBox: false,
       selectionIndicator: false,
+      // Solo ramo 'cesium' con token: Cesium World Terrain come terreno reale.
+      // Opzione `terrain` (non `terrainProvider`): gestisce il provider
+      // asincrono internamente (doc d.ts Viewer.ConstructorOptions).
+      ...(ionConfigured ? { terrain: Terrain.fromWorldTerrain() } : {}),
     })
 
     viewerRef.current = viewer
@@ -171,36 +220,71 @@ export default function CesiumViewer({
     const resizeObserver = new ResizeObserver(() => viewer.resize())
     resizeObserver.observe(container)
 
-    const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined
-    if (apiKey === undefined || apiKey === '') {
-      setNotice(
-        'Google Photorealistic 3D Tiles non attivi: imposta VITE_GOOGLE_MAPS_API_KEY in .env.local e riavvia il server di sviluppo.',
-      )
-    } else {
-      Cesium3DTileset.fromUrl(`${GOOGLE_3D_TILES_ROOT_URL}?key=${apiKey}`, {
-        // Requisito Google: attribution sempre visibile a schermo.
-        showCreditsOnScreen: true,
-      })
-        .then((tileset) => {
+    if (!cesiumProviderActive) {
+      // Ramo 'google' (T-003): tiles fotorealistici via Map Tiles API.
+      const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined
+      if (apiKey === undefined || apiKey === '') {
+        setNotice(
+          'Google Photorealistic 3D Tiles non attivi: imposta VITE_GOOGLE_MAPS_API_KEY in .env.local e riavvia il server di sviluppo.',
+        )
+      } else {
+        Cesium3DTileset.fromUrl(`${GOOGLE_3D_TILES_ROOT_URL}?key=${apiKey}`, {
+          // Requisito Google: attribution sempre visibile a schermo.
+          showCreditsOnScreen: true,
+        })
+          .then((tileset) => {
+            if (disposed) {
+              tileset.destroy()
+              return
+            }
+            viewer.scene.primitives.add(tileset)
+            // Sample ufficiale Google: la superficie fotorealistica sostituisce
+            // l'ellissoide di base.
+            viewer.scene.globe.show = false
+          })
+          .catch((error: unknown) => {
+            if (disposed) {
+              return
+            }
+            console.error('Caricamento Google Photorealistic 3D Tiles fallito:', error)
+            setNotice(
+              `Errore nel caricamento di Google Photorealistic 3D Tiles: ${describeError(error)}`,
+            )
+          })
+      }
+    } else if (ionConfigured) {
+      // Ramo 'cesium' (Fase 5b): imagery Bing Aerial via ion come base layer e
+      // Cesium OSM Buildings come volumi 3D; il terrain (Cesium World Terrain)
+      // è già impostato nelle opzioni del Viewer. I credit ion/imagery restano
+      // a schermo: requisito dei provider dei dati.
+      createWorldImageryAsync({ style: IonWorldImageryStyle.AERIAL })
+        .then((imageryProvider) => {
           if (disposed) {
-            tileset.destroy()
             return
           }
-          viewer.scene.primitives.add(tileset)
-          // Sample ufficiale Google: la superficie fotorealistica sostituisce
-          // l'ellissoide di base.
-          viewer.scene.globe.show = false
+          viewer.imageryLayers.addImageryProvider(imageryProvider)
         })
         .catch((error: unknown) => {
           if (disposed) {
             return
           }
-          console.error('Caricamento Google Photorealistic 3D Tiles fallito:', error)
-          const message =
-            error instanceof Error && error.message !== ''
-              ? error.message
-              : 'vedi console per i dettagli'
-          setNotice(`Errore nel caricamento di Google Photorealistic 3D Tiles: ${message}`)
+          console.error('Caricamento imagery Cesium ion fallito:', error)
+          setNotice(`Errore nel caricamento dell'imagery Cesium ion: ${describeError(error)}`)
+        })
+      createOsmBuildingsAsync()
+        .then((buildings) => {
+          if (disposed) {
+            buildings.destroy()
+            return
+          }
+          viewer.scene.primitives.add(buildings)
+        })
+        .catch((error: unknown) => {
+          if (disposed) {
+            return
+          }
+          console.error('Caricamento Cesium OSM Buildings fallito:', error)
+          setNotice(`Errore nel caricamento di Cesium OSM Buildings: ${describeError(error)}`)
         })
     }
 
