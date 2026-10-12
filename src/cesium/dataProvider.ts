@@ -1,8 +1,8 @@
 // Sorgente dati 3D della scena (Fase 5b).
-// - 'google': Google Photorealistic 3D Tiles via Map Tiles API (originale).
-// - 'cesium': contenuti di Cesium ion (Cesium World Terrain + imagery Bing
-//   Aerial + Cesium OSM Buildings), fallback se l'accesso Google al 3D è
-//   limitato.
+// - 'google': Google Photorealistic 3D Tiles via Map Tiles API diretta.
+// - 'cesium': la stessa mesh Google servita da Cesium ion (asset pubblico
+//   2275207, T-034), fallback dove l'accesso diretto alla Map Tiles API è
+//   limitato o bloccato (T-032).
 export type SceneDataProvider = 'google' | 'cesium'
 
 export interface ResolvedSceneProvider {

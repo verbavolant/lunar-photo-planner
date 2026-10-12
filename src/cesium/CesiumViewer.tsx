@@ -8,14 +8,10 @@ import {
   Cartesian3,
   Color,
   Ion,
-  IonWorldImageryStyle,
   JulianDate,
   ScreenSpaceEventHandler,
   ScreenSpaceEventType,
-  Terrain,
   Viewer,
-  createOsmBuildingsAsync,
-  createWorldImageryAsync,
 } from 'cesium'
 import 'cesium/Build/Cesium/Widgets/widgets.css'
 import { resolveSceneDataProvider } from './dataProvider'
@@ -40,6 +36,14 @@ export interface CesiumViewerProps {
 // La chiave non va mai hardcodata: arriva da VITE_GOOGLE_MAPS_API_KEY.
 const GOOGLE_3D_TILES_ROOT_URL = 'https://tile.googleapis.com/v1/3dtiles/root.json'
 
+// Google Photorealistic 3D Tiles anche via Cesium ion: asset pubblico 2275207
+// (richiesta umano; tutorial ufficiale CesiumJS "Photorealistic 3D Tiles from
+// Google Maps Platform in CesiumJS", cesium.com/learn, consultato 2026-10-07;
+// API `Cesium3DTileset.fromIonAssetId` verificata su Cesium.d.ts 1.146). L'asset
+// va abilitato lato account/token ion. Permette lo streaming della stessa mesh
+// Google dove la Map Tiles API diretta è bloccata (T-032, area EEA).
+const GOOGLE_PHOTOREALISTIC_ION_ASSET_ID = 2275207
+
 const OVERLAY_STYLE = {
   position: 'absolute' as const,
   top: 16,
@@ -63,10 +67,11 @@ function describeError(error: unknown): string {
 }
 
 // Scena CesiumJS con sorgente dati 3D configurabile (Fase 5b): Google
-// Photorealistic 3D Tiles (T-003) oppure Cesium ion (World Terrain + Bing
-// Aerial + OSM Buildings). L'attribution resta a schermo: requisito dei
-// provider dei dati (Google Map Tiles API Policies; credit ion/imagery).
-// T-008: il clic posiziona Observer/Target sulla superficie reale.
+// Photorealistic 3D Tiles, via Map Tiles API diretta (ramo 'google', T-003)
+// oppure via Cesium ion, asset 2275207 (ramo 'cesium', T-034). L'attribution
+// resta a schermo: requisito dei provider dei dati (Google Map Tiles API
+// Policies; credit ion). T-008: il clic posiziona Observer/Target sulla
+// superficie reale.
 export default function CesiumViewer({
   observer,
   target,
@@ -123,9 +128,9 @@ export default function CesiumViewer({
       setNotice(sceneProvider.invalidWarning)
     }
 
-    // Ramo 'cesium': il token ion va impostato PRIMA di creare il Viewer
-    // (Terrain e imagery ion lo leggono internamente). Senza token la scena
-    // resta su globo vuoto, con l'avviso a schermo.
+    // Ramo 'cesium': il token ion va impostato prima di ogni richiesta ion
+    // (`Cesium3DTileset.fromIonAssetId` lo legge internamente). Senza token la
+    // scena resta su globo vuoto, con l'avviso a schermo.
     const ionToken = import.meta.env.VITE_CESIUM_ION_TOKEN as string | undefined
     const cesiumProviderActive = sceneProvider.provider === 'cesium'
     const ionConfigured =
@@ -141,8 +146,10 @@ export default function CesiumViewer({
     }
 
     const viewer = new Viewer(container, {
-      // Nessun imagery di default: lo aggiunge il provider scelto (tiles
-      // Google nel ramo 'google', Bing Aerial via ion nel ramo 'cesium').
+      // Nessun imagery/terrain di default: la superficie arriva dai tiles
+      // Google del provider attivo (ramo 'google' via root.json, ramo 'cesium'
+      // via ion). Se i tiles non caricano resta il globo nudo, comunque
+      // selezionabile col pick.
       baseLayer: false,
       baseLayerPicker: false,
       geocoder: false,
@@ -154,10 +161,6 @@ export default function CesiumViewer({
       fullscreenButton: false,
       infoBox: false,
       selectionIndicator: false,
-      // Solo ramo 'cesium' con token: Cesium World Terrain come terreno reale.
-      // Opzione `terrain` (non `terrainProvider`): gestisce il provider
-      // asincrono internamente (doc d.ts Viewer.ConstructorOptions).
-      ...(ionConfigured ? { terrain: Terrain.fromWorldTerrain() } : {}),
     })
 
     viewerRef.current = viewer
@@ -253,38 +256,32 @@ export default function CesiumViewer({
           })
       }
     } else if (ionConfigured) {
-      // Ramo 'cesium' (Fase 5b): imagery Bing Aerial via ion come base layer e
-      // Cesium OSM Buildings come volumi 3D; il terrain (Cesium World Terrain)
-      // è già impostato nelle opzioni del Viewer. I credit ion/imagery restano
-      // a schermo: requisito dei provider dei dati.
-      createWorldImageryAsync({ style: IonWorldImageryStyle.AERIAL })
-        .then((imageryProvider) => {
+      // Ramo 'cesium' (T-034): stessa mesh Google del ramo 'google', ma
+      // servita da Cesium ion (asset 2275207) invece che dalla Map Tiles API
+      // diretta — funziona anche dove l'accesso diretto è bloccato (T-032).
+      // Come da tutorial ufficiale CesiumJS, a caricamento avvenuto il globo
+      // viene nascosto: il tileset copre l'estensione del globo, e terrain/
+      // imagery sotto la mesh causerebbero z-fighting e doppio streaming. Se
+      // il caricamento fallisce il globo resta visibile (fallback navigabile)
+      // con l'avviso a schermo. I credit Google/ion restano a schermo:
+      // requisito dei provider dei dati.
+      Cesium3DTileset.fromIonAssetId(GOOGLE_PHOTOREALISTIC_ION_ASSET_ID)
+        .then((tileset) => {
           if (disposed) {
+            tileset.destroy()
             return
           }
-          viewer.imageryLayers.addImageryProvider(imageryProvider)
+          viewer.scene.primitives.add(tileset)
+          viewer.scene.globe.show = false
         })
         .catch((error: unknown) => {
           if (disposed) {
             return
           }
-          console.error('Caricamento imagery Cesium ion fallito:', error)
-          setNotice(`Errore nel caricamento dell'imagery Cesium ion: ${describeError(error)}`)
-        })
-      createOsmBuildingsAsync()
-        .then((buildings) => {
-          if (disposed) {
-            buildings.destroy()
-            return
-          }
-          viewer.scene.primitives.add(buildings)
-        })
-        .catch((error: unknown) => {
-          if (disposed) {
-            return
-          }
-          console.error('Caricamento Cesium OSM Buildings fallito:', error)
-          setNotice(`Errore nel caricamento di Cesium OSM Buildings: ${describeError(error)}`)
+          console.error('Caricamento Google Photorealistic 3D Tiles via ion fallito:', error)
+          setNotice(
+            `Errore nel caricamento di Google Photorealistic 3D Tiles via Cesium ion: ${describeError(error)}`,
+          )
         })
     }
 

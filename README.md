@@ -28,7 +28,7 @@ npm run preview    # anteprima della build
 Per chi sviluppa con assistenza AI: leggere `AGENTS.md` e i file in `docs/ai/`.
 
 ## Configurazione della sorgente 3D
-La scena usa di default **Google Photorealistic 3D Tiles**. In alternativa è disponibile **Cesium ion** (Cesium World Terrain + imagery Bing Aerial + Cesium OSM Buildings), utile se l'accesso Google al 3D è limitato o esaurito.
+La scena usa di default **Google Photorealistic 3D Tiles** via Map Tiles API. In alternativa la stessa mesh è disponibile **via Cesium ion** (asset pubblico 2275207), utile dove l'accesso diretto alla Map Tiles API è limitato o bloccato (es. area EEA).
 
 **Scelta del provider:**
 - Default da configurazione: `VITE_SCENE_PROVIDER=google` (o `cesium`) in `.env.local`.
@@ -51,7 +51,7 @@ I tiles fotorealistici richiedono una chiave Google Maps Platform con la **Map T
 Senza chiave l'app resta navigabile (globo vuoto) e mostra un avviso a schermo. L'attribution richiesta dalle Google Map Tiles API Policies è mostrata automaticamente da CesiumJS (`showCreditsOnScreen`). Per il deploy (GitHub Actions) la chiave va passata come secret di build, senza stamparla nei log.
 
 ### Cesium ion (provider `cesium`)
-1. Crea un account gratuito su https://ion.cesium.com e un token in **Tokens** (asset consentiti: Cesium World Terrain, Bing Maps Aerial, Cesium OSM Buildings).
+1. Crea un account gratuito su https://ion.cesium.com e un token in **Tokens** con l'asset **Google Photorealistic 3D Tiles** (asset 2275207) tra quelli consentiti.
 2. Copia `.env.example` in `.env.local` e inserisci:
 
    ```
@@ -61,7 +61,7 @@ Senza chiave l'app resta navigabile (globo vuoto) e mostra un avviso a schermo. 
 
 3. Riavvia il server di sviluppo.
 
-Nota: con Cesium ion la scena mostra terrain reale e edifici volumetrici (OSM Buildings), non la mesh fotorealistica di Google. Il piano gratuito Community di ion prevede 15 GB/mese di streaming e 1.000 sessioni/mese di imagery commerciale (uso individuale, non commerciale). I credit dei dati restano a schermo: requisito dei provider.
+Nota: con Cesium ion la scena carica la **stessa mesh fotorealistica di Google**, servita da ion (asset 2275207) invece che dalla Map Tiles API diretta: comoda dove l'accesso diretto è bloccato (es. area EEA). A caricamento avvenuto il globo viene nascosto, come da tutorial ufficiale CesiumJS (il tileset copre il globo). Se il token manca o l'asset non è abilitato resta un globo vuoto con avviso a schermo. Lo streaming via ion consuma la quota del piano (Community gratuito: 15 GB/mese, uso individuale non commerciale). I credit dei dati restano a schermo: requisito dei provider.
 
 ## Deploy su GitHub Pages
 1. Su GitHub crea un repository **vuoto** (senza README/license pregenerati) con branch `main`.
