@@ -3,6 +3,7 @@ import {
   heightDifferenceM,
   inverseGeodesic,
   lineOfSightAzimuthDeg,
+  movePointOnWGS84,
   straightDistanceM,
   verticalAngleDeg,
   type GeoPoint,
@@ -220,5 +221,47 @@ describe("lineOfSightAzimuthDeg — azimut orizzontale della corda 3D Observer�
 
   it('punti coincidenti: errore esplicito', () => {
     expect(() => lineOfSightAzimuthDeg(OBSERVER_45_10, OBSERVER_45_10)).toThrow(/coincidono/)
+  })
+})
+
+describe('movePointOnWGS84 — problema diretto locale su WGS84 (T-037)', () => {
+  it('a 100 m: distanza e azimut iniziale coerenti con Vincenty (EllipsoidGeodesic)', () => {
+    const start: GeoPoint = { latitudeDeg: 45.5397, longitudeDeg: 10.2197, heightM: 156 }
+    for (const azimuthDeg of [0, 45, 90, 135, 180, 225, 270, 315]) {
+      const moved = movePointOnWGS84(start, azimuthDeg, 100)
+      const geodesic = inverseGeodesic(start, moved)
+      expect(Math.abs(geodesic.distanceM - 100)).toBeLessThan(0.01)
+      expect(Math.abs(geodesic.initialBearingDeg - azimuthDeg)).toBeLessThan(0.002)
+    }
+  })
+
+  it('equatore ed emisfero sud: stessa precisione a 100 m', () => {
+    const starts: GeoPoint[] = [
+      { latitudeDeg: 0, longitudeDeg: 12.5, heightM: 3 },
+      { latitudeDeg: -33.86, longitudeDeg: 151.21, heightM: 58 },
+    ]
+    for (const start of starts) {
+      const moved = movePointOnWGS84(start, 77, 100)
+      const geodesic = inverseGeodesic(start, moved)
+      expect(Math.abs(geodesic.distanceM - 100)).toBeLessThan(0.01)
+      expect(Math.abs(geodesic.initialBearingDeg - 77)).toBeLessThan(0.002)
+    }
+  })
+
+  it('quota invariata e azimut normalizzato (370° ≡ 10°)', () => {
+    const start: GeoPoint = { latitudeDeg: 45.5, longitudeDeg: 10.2, heightM: 187 }
+    const moved = movePointOnWGS84(start, 370, 100)
+    const reference = movePointOnWGS84(start, 10, 100)
+    expect(moved.heightM).toBe(187)
+    expect(moved.latitudeDeg).toBeCloseTo(reference.latitudeDeg, 12)
+    expect(moved.longitudeDeg).toBeCloseTo(reference.longitudeDeg, 12)
+  })
+
+  it('input invalidi: errore esplicito (distanza negativa, NaN, punto al polo)', () => {
+    const start: GeoPoint = { latitudeDeg: 45.5, longitudeDeg: 10.2, heightM: 0 }
+    expect(() => movePointOnWGS84(start, 0, -1)).toThrow(RangeError)
+    expect(() => movePointOnWGS84(start, Number.NaN, 10)).toThrow(RangeError)
+    const nearPole: GeoPoint = { latitudeDeg: 89.9999, longitudeDeg: 10.2, heightM: 0 }
+    expect(() => movePointOnWGS84(nearPole, 90, 100)).toThrow(RangeError)
   })
 })

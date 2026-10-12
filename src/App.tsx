@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import type { Viewer } from 'cesium'
 import CesiumViewer from './cesium/CesiumViewer'
 import CameraPovCard from './cesium/CameraPovCard'
-import { flyToObserverView, flyToOverhead } from './cesium/camera'
+import { flyToObserverView, flyToOverhead, moveCameraWithObserver } from './cesium/camera'
 import { moonTopocentric } from './astronomy/moon'
 import {
   HOME_VIEW,
@@ -27,7 +27,7 @@ import {
   localInputValueToMs,
   localUtcOffsetLabel,
 } from './planning/time'
-import { lineOfSightAzimuthDeg, verticalAngleDeg, type GeoPoint } from './geodesy/geodesy'
+import { lineOfSightAzimuthDeg, movePointOnWGS84, verticalAngleDeg, type GeoPoint } from './geodesy/geodesy'
 import { moonPhase } from './astronomy/moonPhase'
 import MoonPhaseCard, { moonPhaseLabel } from './components/MoonPhaseCard'
 
@@ -183,6 +183,13 @@ const OBSERVER_HEIGHT_ROW_STYLE = {
   gap: 6,
 }
 
+// Riga dei comandi di spostamento dell'Observer (T-037): come la riga altezza
+// ma con wrap, per i quattro bottoni direzionali.
+const OBSERVER_MOVE_ROW_STYLE = {
+  ...OBSERVER_HEIGHT_ROW_STYLE,
+  flexWrap: 'wrap' as const,
+}
+
 // Coordinate leggibili in gradi decimali con emisfero e quota in metri.
 function formatPoint(point: GeoPoint): string {
   const latitudeAbs = Math.abs(point.latitudeDeg).toFixed(6)
@@ -236,6 +243,8 @@ export default function App() {
   const [observerGroundM, setObserverGroundM] = useState<number | null>(null)
   // Passo (m) dei bottoni ± dell'altezza dal suolo.
   const [observerHeightStepM, setObserverHeightStepM] = useState(1)
+  // Passo (m) dei comandi di spostamento orizzontale dell'Observer (T-037).
+  const [observerMoveStepM, setObserverMoveStepM] = useState(10)
   const [baseDateMs, setBaseDateMs] = useState<number>(() => Date.now())
   const [sliderOffsetMin, setSliderOffsetMin] = useState(0)
   const [alignmentWindowOpen, setAlignmentWindowOpen] = useState(false)
@@ -285,12 +294,27 @@ export default function App() {
     }
   }
 
+  /**
+   * Applica una nuova posizione all'Observer dai CONTROLLI della card (T-037):
+   * la camera viene traslata dello stesso delta 3D con orientamento invariato,
+   * così la vista segue il punto. Il pick di un punto nuovo (handleScenePick)
+   * NON passa da qui: riposizionare dalla scena è una scelta esplicita di
+   * vista, non un aggiustamento.
+   */
+  function updateObserverPoint(next: GeoPoint): void {
+    const viewer = viewerRef.current
+    if (viewer !== null && !viewer.isDestroyed() && observer !== null) {
+      moveCameraWithObserver(viewer, observer, next)
+    }
+    setObserver(next)
+  }
+
   /** Alza/abbassa l'Observer della quantità indicata rispetto al suolo di pick. */
   function adjustObserverHeightAboveGround(deltaM: number): void {
     if (observer === null || observerGroundM === null) {
       return
     }
-    setObserver(
+    updateObserverPoint(
       observerAtHeightAboveGround(
         observer,
         observerGroundM,
@@ -308,7 +332,24 @@ export default function App() {
     if (Number.isNaN(parsed)) {
       return
     }
-    setObserver(observerAtHeightAboveGround(observer, observerGroundM, parsed))
+    updateObserverPoint(observerAtHeightAboveGround(observer, observerGroundM, parsed))
+  }
+
+  /**
+   * Sposta l'Observer in orizzontale della distanza scelta, lungo la direzione
+   * indicata rispetto all'azimut corrente della vista (T-037): 0 = avanti,
+   * 90 = destra, 180 = indietro, 270 = sinistra. La quota resta quella
+   * corrente: il suolo non viene rimisurato (ADR-012) — follow-up T-038.
+   */
+  function moveObserverViewRelative(offsetDeg: number): void {
+    if (observer === null) {
+      return
+    }
+    const viewer = viewerRef.current
+    const headingDeg =
+      viewer === null || viewer.isDestroyed() ? 0 : (viewer.camera.heading * 180) / Math.PI
+    const azimuthDeg = (headingDeg + offsetDeg + 360) % 360
+    updateObserverPoint(movePointOnWGS84(observer, azimuthDeg, observerMoveStepM))
   }
 
   function flyToHomeView(): void {
@@ -495,6 +536,53 @@ export default function App() {
                   </label>
                 </div>
               )}
+              <div style={ROW_STYLE}>Sposta (rispetto alla direzione di vista):</div>
+              <div style={OBSERVER_MOVE_ROW_STYLE}>
+                <button
+                  onClick={() => moveObserverViewRelative(270)}
+                  style={BUTTON_STYLE}
+                  title="Sposta l'Observer a sinistra della direzione di vista; la vista segue il punto"
+                >
+                  ◀ sinistra
+                </button>
+                <button
+                  onClick={() => moveObserverViewRelative(0)}
+                  style={BUTTON_STYLE}
+                  title="Sposta l'Observer avanti nella direzione di vista; la vista segue il punto"
+                >
+                  ▲ avanti
+                </button>
+                <button
+                  onClick={() => moveObserverViewRelative(180)}
+                  style={BUTTON_STYLE}
+                  title="Sposta l'Observer all'indietro rispetto alla direzione di vista; la vista segue il punto"
+                >
+                  ▼ indietro
+                </button>
+                <button
+                  onClick={() => moveObserverViewRelative(90)}
+                  style={BUTTON_STYLE}
+                  title="Sposta l'Observer a destra della direzione di vista; la vista segue il punto"
+                >
+                  ▶ destra
+                </button>
+              </div>
+              <div style={OBSERVER_HEIGHT_ROW_STYLE}>
+                <label style={ROW_STYLE}>
+                  passo{' '}
+                  <select
+                    value={observerMoveStepM}
+                    onChange={(event) =>
+                      setObserverMoveStepM(Number.parseInt(event.target.value, 10))
+                    }
+                    aria-label="Passo dei comandi di spostamento dell'Observer"
+                  >
+                    <option value={1}>1 m</option>
+                    <option value={10}>10 m</option>
+                    <option value={100}>100 m</option>
+                  </select>
+                </label>
+              </div>
             </div>
           )}
           {observer === null && target === null && (

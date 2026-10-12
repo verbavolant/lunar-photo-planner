@@ -49,3 +49,43 @@ export function flyToObserverView(
     duration: durationSeconds,
   })
 }
+
+/**
+ * Trasla la camera dello stesso spostamento 3D dell'Observer (T-037): l'offset
+ * relativo camera↔Observer resta invariato, quindi la vista segue il punto
+ * quando viene alzato/abbassato o spostato dai comandi della card. L'orientamento
+ * (heading/pitch/roll in radianti, API Camera.setView verificata su
+ * Cesium.d.ts 1.146 righe 29572–29782) viene ricatturato PRIMA della
+ * traslazione e riapplicato alla nuova posizione: la direzione di vista resta
+ * la stessa rispetto all'orizzonte locale del punto.
+ */
+export function moveCameraWithObserver(
+  viewer: Viewer,
+  fromPoint: GeoPoint,
+  toPoint: GeoPoint,
+): void {
+  const camera = viewer.camera
+  const from = Cartesian3.fromDegrees(
+    fromPoint.longitudeDeg,
+    fromPoint.latitudeDeg,
+    fromPoint.heightM,
+  )
+  const to = Cartesian3.fromDegrees(
+    toPoint.longitudeDeg,
+    toPoint.latitudeDeg,
+    toPoint.heightM,
+  )
+  if (Cartesian3.equals(from, to)) {
+    return
+  }
+  const delta = Cartesian3.subtract(to, from, new Cartesian3())
+  const destination = Cartesian3.add(camera.position, delta, new Cartesian3())
+  camera.setView({
+    destination,
+    orientation: {
+      heading: camera.heading,
+      pitch: camera.pitch,
+      roll: camera.roll,
+    },
+  })
+}

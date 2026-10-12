@@ -72,6 +72,65 @@ export function inverseGeodesic(a: GeoPoint, b: GeoPoint): GeodesicInverse {
   }
 }
 
+// Costanti WGS84 (definizione ufficiale, NIMA TR8350.2): semiasse maggiore e
+// schiacciamento, con e² = f·(2−f). Sono gli stessi valori usati da
+// Ellipsoid.WGS84 di @cesium/core (coerenza verificata nei test contro
+// EllipsoidGeodesic).
+const WGS84_SEMI_MAJOR_AXIS_M = 6_378_137
+const WGS84_FLATTENING = 1 / 298.257_223_563
+
+/**
+ * Sposta un punto sulla superficie WGS84 della distanza indicata lungo
+ * l'azimut dato (0 = nord, 90 = est, orario; valori fuori [0,360) normalizzati),
+ * mantenendo la quota. Problema diretto in forma locale di primo ordine:
+ * spostamento in metri nel piano locale ENU convertito in gradi con i raggi di
+ * curvatura del meridiano M(φ) = a·(1−e²)/(1−e²·sin²φ)^{3/2} e del primo
+ * verticale N(φ) = a/(1−e²·sin²φ)^{1/2} (formule standard di geodesia, es.
+ * Torge, "Geodesy"). A scala urbana (passi ≤ poche centinaia di m) l'errore
+ * rispetto alla geodetica di Vincenty è sottocentimetrico: verificato in
+ * geodesy.test.ts contro `EllipsoidGeodesic` (distanza entro 1 cm, azimut
+ * iniziale entro 0,002° a 100 m).
+ * @throws RangeError per distanza negativa o non finita, valori non finiti o
+ *   punto troppo vicino al polo (|cos φ| < 10⁻⁴: la formula della longitudine
+ *   diventa indefinita).
+ */
+export function movePointOnWGS84(
+  point: GeoPoint,
+  azimuthDeg: number,
+  distanceM: number,
+): GeoPoint {
+  if (!Number.isFinite(distanceM) || distanceM < 0) {
+    throw new RangeError('Distanza di spostamento non valida: deve essere finita e ≥ 0.')
+  }
+  if (
+    !Number.isFinite(azimuthDeg) ||
+    !Number.isFinite(point.latitudeDeg) ||
+    !Number.isFinite(point.longitudeDeg)
+  ) {
+    throw new RangeError('Azimut o coordinate non finiti.')
+  }
+  const latitudeRad = (point.latitudeDeg * Math.PI) / 180
+  const cosLatitude = Math.cos(latitudeRad)
+  if (Math.abs(cosLatitude) < 1e-4) {
+    throw new RangeError('Punto troppo vicino al polo: spostamento in longitudine indefinito.')
+  }
+  const azimuthRad = ((((azimuthDeg % 360) + 360) % 360) * Math.PI) / 180
+  const eccentricitySquared = WGS84_FLATTENING * (2 - WGS84_FLATTENING)
+  const sinLatitude = Math.sin(latitudeRad)
+  const denominator = 1 - eccentricitySquared * sinLatitude * sinLatitude
+  const meridianRadiusM =
+    (WGS84_SEMI_MAJOR_AXIS_M * (1 - eccentricitySquared)) / (denominator * Math.sqrt(denominator))
+  const primeVerticalRadiusM = WGS84_SEMI_MAJOR_AXIS_M / Math.sqrt(denominator)
+  const northM = distanceM * Math.cos(azimuthRad)
+  const eastM = distanceM * Math.sin(azimuthRad)
+  return {
+    latitudeDeg: point.latitudeDeg + (northM / meridianRadiusM) * (180 / Math.PI),
+    longitudeDeg:
+      point.longitudeDeg + (eastM / (primeVerticalRadiusM * cosLatitude)) * (180 / Math.PI),
+    heightM: point.heightM,
+  }
+}
+
 /** Differenza di quota Target − Observer, in metri (positiva = Target più alto). */
 export function heightDifferenceM(target: GeoPoint, observer: GeoPoint): number {
   return target.heightM - observer.heightM
