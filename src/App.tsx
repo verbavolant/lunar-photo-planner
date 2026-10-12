@@ -1,9 +1,16 @@
 import { useRef, useState } from 'react'
 import type { Viewer } from 'cesium'
 import CesiumViewer from './cesium/CesiumViewer'
+import CameraPovCard from './cesium/CameraPovCard'
 import { flyToObserverView, flyToOverhead } from './cesium/camera'
 import { moonTopocentric } from './astronomy/moon'
-import { HOME_VIEW, PLANNER_POINT_LABELS, type PlannerPointId } from './planning/points'
+import {
+  HOME_VIEW,
+  PLANNER_POINT_LABELS,
+  observerAtHeightAboveGround,
+  observerHeightAboveGroundM,
+  type PlannerPointId,
+} from './planning/points'
 import { buildMeasurements, type MeasurementRow } from './planning/measurements'
 import {
   DEFAULT_ALIGNMENT_DAYS,
@@ -167,6 +174,13 @@ const NUMBER_INPUT_STYLE = {
   width: 64,
 }
 
+// Riga dei controlli ±/input/passo dell'altezza dal suolo dell'Observer (T-035).
+const OBSERVER_HEIGHT_ROW_STYLE = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 6,
+}
+
 // Coordinate leggibili in gradi decimali con emisfero e quota in metri.
 function formatPoint(point: GeoPoint): string {
   const latitudeAbs = Math.abs(point.latitudeDeg).toFixed(6)
@@ -212,6 +226,14 @@ export default function App() {
   const [target, setTarget] = useState<GeoPoint | null>(null)
   const [activePoint, setActivePoint] = useState<PlannerPointId>('observer')
   const viewerRef = useRef<Viewer | null>(null)
+  // Viewer anche in stato (non solo ref): la card POV camera si iscrive ai suoi
+  // eventi (T-035).
+  const [viewer, setViewer] = useState<Viewer | null>(null)
+  // Quota del suolo misurata al pick dell'Observer: riferimento per l'altezza
+  // dal suolo (ADR-012: non ricampionata a valle del pick).
+  const [observerGroundM, setObserverGroundM] = useState<number | null>(null)
+  // Passo (m) dei bottoni ± dell'altezza dal suolo.
+  const [observerHeightStepM, setObserverHeightStepM] = useState(1)
   const [baseDateMs, setBaseDateMs] = useState<number>(() => Date.now())
   const [sliderOffsetMin, setSliderOffsetMin] = useState(0)
   const [alignmentWindowOpen, setAlignmentWindowOpen] = useState(false)
@@ -241,6 +263,9 @@ export default function App() {
   function handleScenePick(point: GeoPoint): void {
     if (activePoint === 'observer') {
       setObserver(point)
+      // Il suolo di riferimento per l'altezza dal suolo è la quota del pick
+      // (ADR-012): a ogni nuovo pick l'altezza dal suolo riparte da 0.
+      setObserverGroundM(point.heightM)
     } else {
       setTarget(point)
     }
@@ -249,9 +274,36 @@ export default function App() {
   function clearActivePoint(): void {
     if (activePoint === 'observer') {
       setObserver(null)
+      setObserverGroundM(null)
     } else {
       setTarget(null)
     }
+  }
+
+  /** Alza/abbassa l'Observer della quantità indicata rispetto al suolo di pick. */
+  function adjustObserverHeightAboveGround(deltaM: number): void {
+    if (observer === null || observerGroundM === null) {
+      return
+    }
+    setObserver(
+      observerAtHeightAboveGround(
+        observer,
+        observerGroundM,
+        observerHeightAboveGroundM(observer, observerGroundM) + deltaM,
+      ),
+    )
+  }
+
+  /** Altezza dal suolo inserita a mano (interi; vuoto/non numerico = nessun cambio). */
+  function handleObserverHeightInput(value: string): void {
+    if (observer === null || observerGroundM === null) {
+      return
+    }
+    const parsed = Number.parseInt(value, 10)
+    if (Number.isNaN(parsed)) {
+      return
+    }
+    setObserver(observerAtHeightAboveGround(observer, observerGroundM, parsed))
   }
 
   function flyToHomeView(): void {
@@ -382,6 +434,63 @@ export default function App() {
       </div>
       <div style={MAIN_ROW_STYLE}>
         <div style={SIDEBAR_STYLE}>
+          <CameraPovCard viewer={viewer} />
+          {observer !== null && (
+            <div style={CARD_STYLE}>
+              <div style={ROW_STYLE}>
+                Quota (ellissoide): <strong>{observer.heightM.toFixed(0)} m</strong>
+              </div>
+              <div style={ROW_STYLE}>
+                Altezza dal suolo:{' '}
+                <strong>
+                  {observerGroundM === null
+                    ? '—'
+                    : `${observerHeightAboveGroundM(observer, observerGroundM).toFixed(0)} m`}
+                </strong>
+              </div>
+              {observerGroundM !== null && (
+                <div style={OBSERVER_HEIGHT_ROW_STYLE}>
+                  <button
+                    onClick={() => adjustObserverHeightAboveGround(-observerHeightStepM)}
+                    style={BUTTON_STYLE}
+                    title="Abbassa l'Observer verso il suolo"
+                  >
+                    −
+                  </button>
+                  <input
+                    type="number"
+                    min={0}
+                    step={1}
+                    value={observerHeightAboveGroundM(observer, observerGroundM)}
+                    onChange={(event) => handleObserverHeightInput(event.target.value)}
+                    style={NUMBER_INPUT_STYLE}
+                    aria-label="Altezza dell'Observer dal suolo, in metri"
+                  />
+                  <button
+                    onClick={() => adjustObserverHeightAboveGround(observerHeightStepM)}
+                    style={BUTTON_STYLE}
+                    title="Alza l'Observer dal suolo"
+                  >
+                    +
+                  </button>
+                  <label style={ROW_STYLE}>
+                    passo{' '}
+                    <select
+                      value={observerHeightStepM}
+                      onChange={(event) =>
+                        setObserverHeightStepM(Number.parseInt(event.target.value, 10))
+                      }
+                      aria-label="Passo dei bottoni ± dell'altezza dal suolo"
+                    >
+                      <option value={1}>1 m</option>
+                      <option value={10}>10 m</option>
+                      <option value={100}>100 m</option>
+                    </select>
+                  </label>
+                </div>
+              )}
+            </div>
+          )}
           {observer === null && target === null && (
             <div style={SIDEBAR_HINT_STYLE}>
               Clicca sulla scena per posizionare Observer e Target: qui compaiono i dati.
@@ -512,6 +621,7 @@ export default function App() {
             onScenePick={handleScenePick}
             onViewerReady={(viewer) => {
               viewerRef.current = viewer
+              setViewer(viewer)
             }}
           />
         </div>
