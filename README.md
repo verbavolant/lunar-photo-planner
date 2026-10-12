@@ -33,6 +33,7 @@ La scena usa di default **Google Photorealistic 3D Tiles** via Map Tiles API. In
 **Scelta del provider:**
 - Default da configurazione: `VITE_SCENE_PROVIDER=google` (o `cesium`) in `.env.local`.
 - Override a runtime senza rebuild: `?provider=google` / `?provider=cesium` nell'URL (comodo per provare entrambe le sorgenti sul sito già pubblicato).
+- Limitazione del dettaglio (T-039): i tile a più di ~1 km dalla camera restano a risoluzione ridotta (i livelli più fini non vengono scaricati): rendering e caricamento più rapidi, qualità vicino invariata. Distanza regolabile a runtime con `?tileMaxM=<metri>` (default 1000; un valore non valido ripristina il default con avviso a schermo) e modificabile in codice con `DEFAULT_MAX_DETAIL_DISTANCE_M` in `src/cesium/tilesetPerformance.ts`.
 - Valore non valido: l'app ricade sul default e mostra un avviso a schermo.
 
 ### Google Photorealistic 3D Tiles (provider `google`)

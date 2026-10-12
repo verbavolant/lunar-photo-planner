@@ -16,6 +16,7 @@ import {
 import 'cesium/Build/Cesium/Widgets/widgets.css'
 import { resolveSceneDataProvider } from './dataProvider'
 import { pickPointOnScene } from './pick'
+import { resolveTileMaxDetailDistanceM, tilesetPerformanceOptions } from './tilesetPerformance'
 import { createMoonTexture, moonDiameterM, moonPositionEcef } from './moonRender'
 import { moonTopocentric, type MoonTopocentric } from '../astronomy/moon'
 import type { GeoPoint } from '../geodesy/geodesy'
@@ -128,6 +129,16 @@ export default function CesiumViewer({
       setNotice(sceneProvider.invalidWarning)
     }
 
+    // T-039: il dettaglio dei tiles si ferma alla distanza scelta (default
+    // 1 km): oltre, i tile restano al LOD del parent e non vengono
+    // scaricati/raffinati. Override runtime senza rebuild: ?tileMaxM=<metri>.
+    const tileMaxM = resolveTileMaxDetailDistanceM(
+      new URLSearchParams(window.location.search).get('tileMaxM') ?? undefined,
+    )
+    if (tileMaxM.invalidWarning !== null) {
+      setNotice(tileMaxM.invalidWarning)
+    }
+
     // Ramo 'cesium': il token ion va impostato prima di ogni richiesta ion
     // (`Cesium3DTileset.fromIonAssetId` lo legge internamente). Senza token la
     // scena resta su globo vuoto, con l'avviso a schermo.
@@ -234,6 +245,8 @@ export default function CesiumViewer({
         Cesium3DTileset.fromUrl(`${GOOGLE_3D_TILES_ROOT_URL}?key=${apiKey}`, {
           // Requisito Google: attribution sempre visibile a schermo.
           showCreditsOnScreen: true,
+          // T-039: dettaglio limitato alla distanza scelta (?tileMaxM=).
+          ...tilesetPerformanceOptions(tileMaxM.maxDetailDistanceM),
         })
           .then((tileset) => {
             if (disposed) {
@@ -265,7 +278,11 @@ export default function CesiumViewer({
       // il caricamento fallisce il globo resta visibile (fallback navigabile)
       // con l'avviso a schermo. I credit Google/ion restano a schermo:
       // requisito dei provider dei dati.
-      Cesium3DTileset.fromIonAssetId(GOOGLE_PHOTOREALISTIC_ION_ASSET_ID)
+      Cesium3DTileset.fromIonAssetId(
+        GOOGLE_PHOTOREALISTIC_ION_ASSET_ID,
+        // T-039: dettaglio limitato alla distanza scelta (?tileMaxM=).
+        tilesetPerformanceOptions(tileMaxM.maxDetailDistanceM),
+      )
         .then((tileset) => {
           if (disposed) {
             tileset.destroy()
