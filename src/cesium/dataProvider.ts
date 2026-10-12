@@ -1,9 +1,19 @@
-// Sorgente dati 3D della scena (Fase 5b).
-// - 'google': Google Photorealistic 3D Tiles via Map Tiles API diretta.
-// - 'cesium': la stessa mesh Google servita da Cesium ion (asset pubblico
-//   2275207, T-034), fallback dove l'accesso diretto alla Map Tiles API è
-//   limitato o bloccato (T-032).
-export type SceneDataProvider = 'google' | 'cesium'
+// Sorgente dati 3D della scena (Fase 5b, T-040).
+// - 'google': Google Photorealistic 3D Tiles via Map Tiles API DIRETTA con la
+//   chiave dell'utente (VITE_GOOGLE_MAPS_API_KEY). Ogni root request consuma
+//   la quota Google per progetto ("3D Tiles root requests per minute" = 150,
+//   fonte dell'errore 429 RATE_LIMIT_EXCEEDED del 2026-10-08): modalità
+//   opt-in da tenere solo per confronto/debug.
+// - 'google-ion': la stessa mesh Google servita da Cesium ion (asset pubblico
+//   2275207, T-034) con chiave Google gestita da ion (verificato dal vivo
+//   2026-10-08 sull'endpoint /v1/assets/2275207/endpoint: type 3DTILES,
+//   options.url = root.json?key=…): le richieste passano SOLO da ion, la
+//   quota del progetto Google dell'utente non è toccata e l'accesso diretto
+//   può anche essere bloccato (T-032, area EEA). Richiede
+//   VITE_CESIUM_ION_TOKEN (T-031).
+// Alias accettato: 'cesium' (nome storico del provider ion), mappato su
+// 'google-ion'.
+export type SceneDataProvider = 'google' | 'google-ion'
 
 export interface ResolvedSceneProvider {
   provider: SceneDataProvider
@@ -15,14 +25,20 @@ export interface ResolvedSceneProvider {
   invalidWarning: string | null
 }
 
-const ADMITTED_PROVIDERS = 'google, cesium'
+const ADMITTED_PROVIDERS = 'google, google-ion (alias: cesium)'
 
 function parseProvider(value: string | undefined): SceneDataProvider | null {
   if (value === undefined) {
     return null
   }
   const normalized = value.trim().toLowerCase()
-  return normalized === 'google' || normalized === 'cesium' ? normalized : null
+  if (normalized === 'google') {
+    return 'google'
+  }
+  if (normalized === 'google-ion' || normalized === 'cesium') {
+    return 'google-ion'
+  }
+  return null
 }
 
 function invalidWarningFor(value: string | undefined): string | null {
@@ -35,9 +51,12 @@ function invalidWarningFor(value: string | undefined): string | null {
 /**
  * Risolve il provider della scena: la query `?provider=` ha priorità sull'env
  * (permette di cambiare sorgente sul sito già deployato senza rebuild), l'env
- * ha priorità sul default 'google'. I valori vuoti sono "non impostati";
- * quelli presenti ma non validi ricadono sul valore valido successivo e
- * producono un avviso.
+ * ha priorità sul default 'google'. Il default resta 'google' per non
+ * cambiare il comportamento del sito deployato finché il secret CI
+ * VITE_CESIUM_ION_TOKEN non è impostato (T-031): per eliminare il 429 in
+ * produzione impostare `VITE_SCENE_PROVIDER=google-ion` + il secret. I valori
+ * vuoti sono "non impostati"; quelli presenti ma non validi ricadono sul
+ * valore valido successivo e producono un avviso.
  */
 export function resolveSceneDataProvider(
   envValue: string | undefined,

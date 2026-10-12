@@ -28,11 +28,13 @@ npm run preview    # anteprima della build
 Per chi sviluppa con assistenza AI: leggere `AGENTS.md` e i file in `docs/ai/`.
 
 ## Configurazione della sorgente 3D
-La scena usa di default **Google Photorealistic 3D Tiles** via Map Tiles API. In alternativa la stessa mesh è disponibile **via Cesium ion** (asset pubblico 2275207), utile dove l'accesso diretto alla Map Tiles API è limitato o bloccato (es. area EEA).
+La scena usa di default **Google Photorealistic 3D Tiles** via Map Tiles API diretta (con la tua chiave; vedi la nota sulla quota sotto). La stessa mesh è disponibile anche **via Cesium ion** (provider `google-ion`, asset pubblico 2275207, chiave Google gestita da ion), utile dove l'accesso diretto alla Map Tiles API è limitato o bloccato (es. area EEA) e per non consumare la tua quota.
 
-**Scelta del provider:**
-- Default da configurazione: `VITE_SCENE_PROVIDER=google` (o `cesium`) in `.env.local`.
-- Override a runtime senza rebuild: `?provider=google` / `?provider=cesium` nell'URL (comodo per provare entrambe le sorgenti sul sito già pubblicato).
+**Scelta del provider e protezione dalla quota (T-040):**
+- Default da configurazione: `VITE_SCENE_PROVIDER=google` (o `google-ion`, alias accettato `cesium`) in `.env.local`.
+- Override a runtime senza rebuild: `?provider=google` / `?provider=google-ion` nell'URL (comodo per provare entrambe le sorgenti sul sito già pubblicato; `?provider=cesium` resta accettato come alias).
+- Un solo tileset per sessione: la creazione del tileset è memoizzata (in sviluppo, i remount di StrictMode/HMR riusano la stessa creazione: una sola root request per caricamento pagina).
+- Errore 429 (limite di richieste): nessun retry immediato — l'app resta sulla vista base (globo senza mesh) e riprova automaticamente dopo 30 s, 2 min e 10 min (4 tentativi totali), con avviso a schermo; al quarto fallimento nessun altro tentativo nella sessione (ricarica la pagina). In console un contatore debug (`tileset "...": creazione #N in questa sessione`) registra le creazioni.
 - Limitazione del dettaglio (T-039): i tile a più di ~1 km dalla camera restano a risoluzione ridotta (i livelli più fini non vengono scaricati): rendering e caricamento più rapidi, qualità vicino invariata. Distanza regolabile a runtime con `?tileMaxM=<metri>` (default 1000; un valore non valido ripristina il default con avviso a schermo) e modificabile in codice con `DEFAULT_MAX_DETAIL_DISTANCE_M` in `src/cesium/tilesetPerformance.ts`.
 - Valore non valido: l'app ricade sul default e mostra un avviso a schermo.
 
@@ -51,18 +53,20 @@ I tiles fotorealistici richiedono una chiave Google Maps Platform con la **Map T
 
 Senza chiave l'app resta navigabile (globo vuoto) e mostra un avviso a schermo. L'attribution richiesta dalle Google Map Tiles API Policies è mostrata automaticamente da CesiumJS (`showCreditsOnScreen`). Per il deploy (GitHub Actions) la chiave va passata come secret di build, senza stamparla nei log.
 
-### Cesium ion (provider `cesium`)
+**Quota (T-040):** Google applica una quota per progetto di **150 root request/min** sui 3D Tiles (`3D Tiles root requests per minute`): superata, l'endpoint risponde `429 RATE_LIMIT_EXCEEDED` e i tiles non caricano finché la finestra non si libera. Con questo provider ogni visitatore consuma la tua quota: per l'uso normale del sito preferisci `google-ion`.
+
+### Cesium ion (provider `google-ion`, alias accettato `cesium`)
 1. Crea un account gratuito su https://ion.cesium.com e un token in **Tokens** con l'asset **Google Photorealistic 3D Tiles** (asset 2275207) tra quelli consentiti.
 2. Copia `.env.example` in `.env.local` e inserisci:
 
    ```
    VITE_CESIUM_ION_TOKEN=il-tuo-token
-   VITE_SCENE_PROVIDER=cesium
+   VITE_SCENE_PROVIDER=google-ion
    ```
 
 3. Riavvia il server di sviluppo.
 
-Nota: con Cesium ion la scena carica la **stessa mesh fotorealistica di Google**, servita da ion (asset 2275207) invece che dalla Map Tiles API diretta: comoda dove l'accesso diretto è bloccato (es. area EEA). A caricamento avvenuto il globo viene nascosto, come da tutorial ufficiale CesiumJS (il tileset copre il globo). Se il token manca o l'asset non è abilitato resta un globo vuoto con avviso a schermo. Lo streaming via ion consuma la quota del piano (Community gratuito: 15 GB/mese, uso individuale non commerciale). I credit dei dati restano a schermo: requisito dei provider.
+Nota: con `google-ion` la scena carica la **stessa mesh fotorealistica di Google**, ma le richieste passano **solo da Cesium ion** (asset 2275207): l'endpoint ion restituisce l'URL Google con una **chiave gestita da ion** (verificato 2026-10-08), quindi la tua chiave e la tua quota Google non vengono usate; comodo anche dove l'accesso diretto è bloccato (es. area EEA). A caricamento avvenuto il globo viene nascosto, come da tutorial ufficiale CesiumJS (il tileset copre il globo). Se il token manca o l'asset non è abilitato resta un globo vuoto con avviso a schermo. Lo streaming via ion consuma i crediti del piano ion (Community gratuito: 15 GB/mese, uso individuale non commerciale). I credit dei dati restano a schermo: requisito dei provider.
 
 ## Deploy su GitHub Pages
 1. Su GitHub crea un repository **vuoto** (senza README/license pregenerati) con branch `main`.
@@ -74,7 +78,7 @@ Nota: con Cesium ion la scena carica la **stessa mesh fotorealistica di Google**
    ```
 
 3. Nel repository: **Settings → Pages → Build and deployment → Source = GitHub Actions**.
-4. **Settings → Secrets and variables → Actions → New repository secret**: nome `VITE_GOOGLE_MAPS_API_KEY`, valore = la stessa chiave di `.env.local`. Opzionale, per il provider `cesium`: secret `VITE_CESIUM_ION_TOKEN` con il token ion, e in **Variables** `VITE_SCENE_PROVIDER=cesium` per cambiare il provider di default del sito senza toccare il codice (poi rilanciare il workflow da Actions → Run workflow). A runtime il provider si può sempre cambiare con `?provider=google|cesium` nell'URL.
+4. **Settings → Secrets and variables → Actions → New repository secret**: nome `VITE_GOOGLE_MAPS_API_KEY`, valore = la stessa chiave di `.env.local`. Opzionale, per il provider `google-ion`: secret `VITE_CESIUM_ION_TOKEN` con il token ion, e in **Variables** `VITE_SCENE_PROVIDER=google-ion` per cambiare il provider di default del sito senza toccare il codice (poi rilanciare il workflow da Actions → Run workflow). A runtime il provider si può sempre cambiare con `?provider=google|google-ion` nell'URL (alias accettato: `cesium`).
 5. In Google Cloud Console aggiorna la restrizione HTTP referrer della chiave aggiungendo `https://<utente>.github.io/*`.
 6. Il workflow `.github/workflows/deploy-pages.yml` esegue install/typecheck/test/build e pubblica `dist/` a ogni push su `main` (e manualmente da Actions → workflow_dispatch).
 

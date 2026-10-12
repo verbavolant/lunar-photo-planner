@@ -9,10 +9,6 @@ describe('resolveSceneDataProvider', () => {
     })
   })
 
-  it('env con maiuscole e spazi: normalizzata (case-insensitive)', () => {
-    expect(resolveSceneDataProvider(' CESIUM ', undefined).provider).toBe('cesium')
-  })
-
   it('env google valida: nessun avviso', () => {
     expect(resolveSceneDataProvider('google', undefined)).toEqual({
       provider: 'google',
@@ -20,9 +16,21 @@ describe('resolveSceneDataProvider', () => {
     })
   })
 
+  it('env google-ion valida: nessun avviso', () => {
+    expect(resolveSceneDataProvider('google-ion', undefined)).toEqual({
+      provider: 'google-ion',
+      invalidWarning: null,
+    })
+  })
+
+  it('alias storico cesium (anche con maiuscole e spazi) → google-ion', () => {
+    expect(resolveSceneDataProvider(' CESIUM ', undefined).provider).toBe('google-ion')
+    expect(resolveSceneDataProvider(undefined, 'cesium').provider).toBe('google-ion')
+  })
+
   it('la query param ha priorità sull\u2019env', () => {
-    expect(resolveSceneDataProvider('google', 'cesium').provider).toBe('cesium')
-    expect(resolveSceneDataProvider('cesium', 'google').provider).toBe('google')
+    expect(resolveSceneDataProvider('google', 'google-ion').provider).toBe('google-ion')
+    expect(resolveSceneDataProvider('google-ion', 'google').provider).toBe('google')
   })
 
   it('valori vuoti = non impostati → default google senza avviso', () => {
@@ -40,8 +48,8 @@ describe('resolveSceneDataProvider', () => {
   })
 
   it('query non valida + env valida: vince l\u2019env, avviso cita la query', () => {
-    const resolved = resolveSceneDataProvider('cesium', 'bogus')
-    expect(resolved.provider).toBe('cesium')
+    const resolved = resolveSceneDataProvider('google-ion', 'bogus')
+    expect(resolved.provider).toBe('google-ion')
     expect(resolved.invalidWarning).toContain('bogus')
   })
 
@@ -50,5 +58,11 @@ describe('resolveSceneDataProvider', () => {
     expect(resolved.provider).toBe('google')
     expect(resolved.invalidWarning).toContain('uno')
     expect(resolved.invalidWarning).toContain('due')
+  })
+
+  it('l\u2019avviso elenca anche l\u2019alias cesium', () => {
+    const resolved = resolveSceneDataProvider('bogus', undefined)
+    expect(resolved.invalidWarning).toContain('google-ion')
+    expect(resolved.invalidWarning).toContain('cesium')
   })
 })
