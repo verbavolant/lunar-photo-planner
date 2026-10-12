@@ -3,7 +3,7 @@ import type { Viewer } from 'cesium'
 import CesiumViewer from './cesium/CesiumViewer'
 import { flyToObserverView, flyToOverhead } from './cesium/camera'
 import { moonTopocentric } from './astronomy/moon'
-import { DEMO_VIEW, PLANNER_POINT_LABELS, type PlannerPointId } from './planning/points'
+import { HOME_VIEW, PLANNER_POINT_LABELS, type PlannerPointId } from './planning/points'
 import { buildMeasurements, type MeasurementRow } from './planning/measurements'
 import {
   DEFAULT_ALIGNMENT_DAYS,
@@ -254,12 +254,12 @@ export default function App() {
     }
   }
 
-  function flyToDemoView(): void {
+  function flyToHomeView(): void {
     const viewer = viewerRef.current
     if (viewer === null || viewer.isDestroyed()) {
       return
     }
-    flyToOverhead(viewer, DEMO_VIEW)
+    flyToOverhead(viewer, HOME_VIEW)
   }
 
   function flyToMoonView(): void {
@@ -350,11 +350,11 @@ export default function App() {
           Azzera
         </button>
         <button
-          onClick={flyToDemoView}
+          onClick={flyToHomeView}
           style={BUTTON_STYLE}
-          title="Vista demo: 45,5°N 10,22°E, scala ≈ 1 km/cm"
+          title="Vai a Home: Piazza della Loggia, centro di Brescia (45,5397°N 10,2197°E), ≈ 500 m sul suolo"
         >
-          Demo vista
+          Vai a Home
         </button>
         <button
           onClick={flyToMoonView}

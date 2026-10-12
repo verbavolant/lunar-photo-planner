@@ -8,13 +8,16 @@ export const PLANNER_POINT_LABELS: Record<PlannerPointId, string> = {
 }
 
 /**
- * Vista di demo (zona di Lonato del Garda): 45,5°N 10,22°E con scala ≈ 1 km = 1 cm.
- * Altezza derivata da: viewport verticale ~23,8 cm (900 px @ 96 dpi), FOV Cesium
- * 60° → h = 23,8 km / (2·tan 30°) ≈ 20,6 km. Stima dipendente dallo schermo:
- * è una vista di demo, non una misura.
+ * Vista "Home" (bottone "Vai a Home"): Piazza della Loggia, centro storico di
+ * Brescia. Coordinate 45°32′23″N 10°13′11″E (it.wikipedia, voce "Piazza della
+ * Loggia") → 45,5397°N 10,2197°E; quota del suolo ≈ 156 m s.l.m. (Copernicus
+ * DEM via api.open-meteo.com, consultato 2026-10-07), trattata come quota
+ * ellissoidea: lo scarto verticale geoide-ellissoide (decine di metri in
+ * Lombardia) non è corretto — stima dichiarata, vista di navigazione, non una
+ * misura. Camera ≈ 500 m sopra il suolo della piazza.
  */
-export const DEMO_VIEW = {
-  longitudeDeg: 10.22,
-  latitudeDeg: 45.5,
-  altitudeM: 20_600,
+export const HOME_VIEW = {
+  longitudeDeg: 10.2197,
+  latitudeDeg: 45.5397,
+  altitudeM: 656, // 156 m (suolo) + 500 m di altezza camera
 } as const

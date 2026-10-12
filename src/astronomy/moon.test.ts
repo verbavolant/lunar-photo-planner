@@ -3,7 +3,7 @@ import { KM_PER_AU } from 'astronomy-engine'
 import { moonTopocentric } from './moon'
 import type { GeoPoint } from '../geodesy/geodesy'
 
-// Osservatore di verifica: Lonato del Garda (stesso punto della vista demo).
+// Osservatore di verifica: Lonato del Garda (punto arbitrario di verifica).
 const OBSERVER: GeoPoint = { latitudeDeg: 45.5, longitudeDeg: 10.22, heightM: 0 }
 
 /**
