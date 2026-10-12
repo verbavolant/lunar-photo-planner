@@ -28,6 +28,8 @@ import {
   localUtcOffsetLabel,
 } from './planning/time'
 import { lineOfSightAzimuthDeg, verticalAngleDeg, type GeoPoint } from './geodesy/geodesy'
+import { moonPhase } from './astronomy/moonPhase'
+import MoonPhaseCard, { moonPhaseLabel } from './components/MoonPhaseCard'
 
 // Layout a pagina (T-027): l'UI non copre più la scena — toolbar sopra la vista,
 // card Tempo sotto, box dati/allineamenti a sinistra. Così il canvas non ha zone
@@ -247,6 +249,9 @@ export default function App() {
     DEFAULT_ALIGNMENT_SEARCH.toleranceDeg,
   )
   const effectiveDate = new Date(effectiveTimeMs(baseDateMs, sliderOffsetMin))
+  // Fase lunare all'orario in uso (geocentrica, standard): card nel box
+  // laterale e % C/D nelle righe dei risultati allineamenti.
+  const phaseNow = moonPhase(effectiveDate)
 
   const points: Record<PlannerPointId, GeoPoint | null> = { observer, target }
 
@@ -435,6 +440,7 @@ export default function App() {
       <div style={MAIN_ROW_STYLE}>
         <div style={SIDEBAR_STYLE}>
           <CameraPovCard viewer={viewer} />
+          <MoonPhaseCard phase={phaseNow} />
           {observer !== null && (
             <div style={CARD_STYLE}>
               <div style={ROW_STYLE}>
@@ -605,9 +611,14 @@ export default function App() {
                   style={ALIGNMENT_ROW_BUTTON_STYLE}
                   title="Adotta questo istante come data/ora della vista"
                 >
-                  {formatLocalDateTime(new Date(candidate.dateMs))} · sep{' '}
-                  {formatAngleDeg(candidate.separationDeg, 2)} ·{' '}
-                  {describeAlignmentOffsets(candidate)}
+                  <div style={ROW_STYLE}>
+                    {formatLocalDateTime(new Date(candidate.dateMs))} · sep{' '}
+                    {formatAngleDeg(candidate.separationDeg, 2)} ·{' '}
+                    {describeAlignmentOffsets(candidate)}
+                  </div>
+                  <div>
+                    fase {moonPhaseLabel(moonPhase(new Date(candidate.dateMs)))}
+                  </div>
                 </button>
               ))}
             </div>

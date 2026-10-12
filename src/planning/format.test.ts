@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { formatAngleDeg, formatDistanceM, formatHeightDifferenceM } from './format'
+import {
+  formatAngleDeg,
+  formatDistanceM,
+  formatHeightDifferenceM,
+  formatPercent,
+} from './format'
 
 describe('formatDistanceM', () => {
   it('usa i metri sotto 1 km e i km oltre, separatore italiano', () => {
@@ -23,5 +28,18 @@ describe('formatHeightDifferenceM', () => {
     expect(formatHeightDifferenceM(500)).toBe('+500 m')
     expect(formatHeightDifferenceM(-12.34)).toBe('-12,3 m')
     expect(formatHeightDifferenceM(0)).toBe('+0 m')
+  })
+})
+
+describe('formatPercent', () => {
+  it('frazione × 100 con stile it-IT, default 0 decimali', () => {
+    expect(formatPercent(0.62)).toBe('62%')
+    expect(formatPercent(0)).toBe('0%')
+    expect(formatPercent(1)).toBe('100%')
+  })
+
+  it('decimali opzionali e arrotondamento all’intero', () => {
+    expect(formatPercent(0.624, 1)).toBe('62,4%')
+    expect(formatPercent(0.9979)).toBe('100%')
   })
 })

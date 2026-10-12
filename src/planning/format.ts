@@ -35,3 +35,9 @@ export function formatHeightDifferenceM(meters: number): string {
   return `${sign}${formatItalianNumber(Math.abs(meters), 1)} m`
 }
 
+/** Percentuale (frazione × 100) in stile it-IT; default 0 decimali. */
+export function formatPercent(fraction: number, fractionDigits = 0): string {
+  return `${formatItalianNumber(fraction * 100, fractionDigits)}%`
+}
+
+
