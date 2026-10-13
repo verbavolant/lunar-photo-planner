@@ -4,6 +4,10 @@ Web app per pianificare fotografie della Luna in allineamento con edifici, monum
 
 > Stato: **Fase 4 completata** (T-016…T-020, checklist e2e chiusa 2026-10-06): Luna renderizzata in scena con posa e dimensione dai dati topocentrici reali, bottone "Vista Luna" (camera sull'Osservatore rivolta verso la Luna), vista dall'alto "Sopra Observer · 100 m", orologio della scena sincronizzato col tempo della UI (regolazione fine ±1 min, ora legale/solare garantita e mostrata), ricerca dei prossimi allineamenti Luna ↔ linea Observer→Target con parametri configurabili (finestra fino a 365 giorni, default 2 mesi). Nel box laterale: POV della camera in tempo reale (lat/lon, quota, azimut, inclinazione) e regolazione dell'altezza dal suolo dell'Osservatore (± con passo 1/10/100 m) con la vista che segue il punto, comandi per spostare l'Osservatore avanti/indietro/destra/sinistra rispetto alla direzione di vista (passo 1/10/100 m; anche qui la vista segue), disco lunare con la fase corrente (frazione illuminata reale) e card "Fase lunare" sempre visibile; nei risultati degli allineamenti ogni istante mostra la fase in % con C = crescente / D = decrescente. Fasi 1–4 approvate; **Fase 5 (Photographer View) in attesa di approvazione**. Live: https://verbavolant.github.io/lunar-photo-planner/
 
+## Usare l'app
+
+**Guida passo passo per l'utente: [MANUALE.md](MANUALE.md)** — interfaccia, navigazione della scena 3D, posizionamento di Osservatore e Target, uso del tempo, lettura di azimut/altitudine/diametro lunare, ricerca degli allineamenti, parametri URL (`?provider=`, `?tileMaxM=`), messaggi di errore e limitazioni dichiarate.
+
 ## Obiettivo
 Permettere al fotografo di scegliere un soggetto e capire dove posizionarsi, quando scattare, quale focale usare e come apparirà la Luna rispetto al soggetto.
 
