@@ -30,6 +30,8 @@ import {
 import { lineOfSightAzimuthDeg, movePointOnWGS84, verticalAngleDeg, type GeoPoint } from './geodesy/geodesy'
 import { moonPhase } from './astronomy/moonPhase'
 import MoonPhaseCard, { moonPhaseLabel } from './components/MoonPhaseCard'
+import { manualeDocumentHtml } from './utils/manuale'
+import manualeMarkdown from '../MANUALE.md?raw'
 
 // Layout a pagina (T-027): l'UI non copre più la scena — toolbar sopra la vista,
 // card Tempo sotto, box dati/allineamenti a sinistra. Così il canvas non ha zone
@@ -228,6 +230,23 @@ function clampFloat(value: string, min: number, max: number, fallback: number): 
     return fallback
   }
   return Math.min(max, Math.max(min, parsed))
+}
+
+// Apre il manuale (importato a build time con ?raw: niente fetch, la finestra
+// si riempie nello stesso gesto del click e i popup blocker non intervengono).
+// Finestra separata come richiesto; se il browser la blocca si ripiega su una
+// nuova scheda; se blocca anche quella resta il messaggio in console.
+function openManualeWindow(): void {
+  const win =
+    window.open('', '_blank', 'width=980,height=880,scrollbars=yes,resizable=yes') ??
+    window.open('', '_blank')
+  if (win === null) {
+    console.error('Manuale: apertura della finestra bloccata dal browser.')
+    return
+  }
+  win.document.open()
+  win.document.write(manualeDocumentHtml(manualeMarkdown))
+  win.document.close()
 }
 
 export default function App() {
@@ -476,6 +495,13 @@ export default function App() {
           title="Cerca i prossimi istanti in cui la Luna passa sulla linea Observer→Target"
         >
           Allineamenti Luna
+        </button>
+        <button
+          onClick={openManualeWindow}
+          style={BUTTON_STYLE}
+          title="Apre il manuale utente (MANUALE.md) in una finestra separata"
+        >
+          Manuale
         </button>
       </div>
       <div style={MAIN_ROW_STYLE}>

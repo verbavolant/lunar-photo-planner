@@ -142,6 +142,7 @@ Premi **`Vista Luna`**: la camera si mette 1 m sopra l'Osservatore, rivolta vers
 | `Vista Luna` | camera **1 m sopra l'Osservatore**, orientata con azimut = azimut della Luna e inclinazione = altitudine della Luna (volo animato di 2 s) | richiede l'Osservatore. È la posa del fotografo: da qui vedi la Luna dove la vedrai davvero |
 | `Sopra Observer · 100 m` | vista dall'alto 100 m sopra l'Osservatore, puntato su di lui, nord in alto | disabilitato finché l'Osservatore non è posizionato |
 | `Allineamenti Luna` | apre la finestra di ricerca degli allineamenti | disabilitato se mancano Osservatore o Target |
+| `Manuale` | apre questo manuale in una **finestra separata**, formattato in HTML | il contenuto è `MANUALE.md` alla root del repository; i collegamenti ai file del repo (es. `README.md`) portano a GitHub |
 
 > **Il punto attivo comanda il clic sulla scena.** Se dopo aver posizionato il Target lasci `Target` selezionato e clicchi sulla scena, sposti il **Target**, non l'Osservatore. Controlla quale dei due pulsanti è evidenziato.
 

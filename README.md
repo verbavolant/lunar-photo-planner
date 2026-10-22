@@ -8,6 +8,8 @@ Web app per pianificare fotografie della Luna in allineamento con edifici, monum
 
 **Guida passo passo per l'utente: [MANUALE.md](MANUALE.md)** — interfaccia, navigazione della scena 3D, posizionamento di Osservatore e Target, uso del tempo, lettura di azimut/altitudine/diametro lunare, ricerca degli allineamenti, parametri URL (`?provider=`, `?tileMaxM=`), messaggi di errore e limitazioni dichiarate.
 
+Dall'app: il pulsante **Manuale** nella barra in alto apre la stessa guida in una finestra separata, formattata in HTML.
+
 ## Obiettivo
 Permettere al fotografo di scegliere un soggetto e capire dove posizionarsi, quando scattare, quale focale usare e come apparirà la Luna rispetto al soggetto.
 
