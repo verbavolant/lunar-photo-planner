@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_ALIGNMENT_SEARCH,
+  alignmentDegs,
   angularSeparationDeg,
   azimuthDifferenceDeg,
   searchMoonAlignments,
 } from './alignment'
+import { moonTopocentric } from '../astronomy/moon'
 import type { GeoPoint } from '../geodesy/geodesy'
 
 // Osservatore di verifica: Lonato del Garda (punto arbitrario di verifica).
@@ -38,6 +40,66 @@ describe('angularSeparationDeg — trigonometria sferica (Meeus, cap. 17)', () =
       angularSeparationDeg(10, 25, 350, -10),
       9,
     )
+  })
+})
+
+describe('alignmentDegs — misura pura Luna ↔ linea di vista', () => {
+  it('Luna esattamente sulla linea: separazione e offset nulli', () => {
+    const moon = {
+      azimuthDeg: 152.829983,
+      altitudeDeg: 28.685969,
+      distanceM: 380_000_000,
+      angularDiameterDeg: 0.55,
+    }
+    const offsets = alignmentDegs(152.829983, 28.685969, moon)
+    // acos(sin²+cos²) per direzioni identiche resta ~1e-6° per la precisione
+    // del double vicino a 1 (≈ 0,003″): tolleranza 1e-5°, non 1e-9°.
+    expect(offsets.separationDeg).toBeCloseTo(0, 5)
+    expect(offsets.horizontalOffsetDeg).toBeCloseTo(0, 9)
+    expect(offsets.verticalOffsetDeg).toBeCloseTo(0, 9)
+  })
+
+  it('casi noti: offset orizzontale = Δazimut, verticale = Δaltitudine', () => {
+    const eastMoon = { azimuthDeg: 90, altitudeDeg: 0, distanceM: 1, angularDiameterDeg: 0 }
+    const east = alignmentDegs(0, 0, eastMoon)
+    expect(east.separationDeg).toBeCloseTo(90, 9)
+    expect(east.horizontalOffsetDeg).toBe(90)
+    expect(east.verticalOffsetDeg).toBe(0)
+
+    // Attraverso il nord: Δazimut −10 (a sinistra), separazione 10.
+    const wrappedMoon = { azimuthDeg: 350, altitudeDeg: 0, distanceM: 1, angularDiameterDeg: 0 }
+    const wrapped = alignmentDegs(0, 0, wrappedMoon)
+    expect(wrapped.separationDeg).toBeCloseTo(10, 9)
+    expect(wrapped.horizontalOffsetDeg).toBe(-10)
+    expect(wrapped.verticalOffsetDeg).toBe(0)
+
+    const highMoon = { azimuthDeg: 0, altitudeDeg: 30, distanceM: 1, angularDiameterDeg: 0 }
+    const high = alignmentDegs(0, 0, highMoon)
+    expect(high.separationDeg).toBeCloseTo(30, 9)
+    expect(high.horizontalOffsetDeg).toBe(0)
+    expect(high.verticalOffsetDeg).toBe(30)
+  })
+
+  it('coerente con i candidati della ricerca sul passaggio noto (Horizons)', () => {
+    const results = searchMoonAlignments({
+      observer: OBSERVER,
+      losAzimuthDeg: 152.829983,
+      losAltitudeDeg: 28.685969,
+      fromDateMs: CROSSING_UTC_MS,
+      durationHours: 2,
+      stepMinutes: 1,
+      toleranceDeg: 0.5,
+      maxResults: 5,
+    })
+    const best = results[0]
+    if (best === undefined) {
+      throw new Error('Nessun candidato trovato')
+    }
+    const moon = moonTopocentric(OBSERVER, new Date(best.dateMs))
+    const offsets = alignmentDegs(152.829983, 28.685969, moon)
+    expect(offsets.separationDeg).toBeCloseTo(best.separationDeg, 9)
+    expect(offsets.horizontalOffsetDeg).toBeCloseTo(best.horizontalOffsetDeg, 9)
+    expect(offsets.verticalOffsetDeg).toBeCloseTo(best.verticalOffsetDeg, 9)
   })
 })
 

@@ -1,15 +1,19 @@
 import { moonTopocentric, type MoonTopocentric } from '../astronomy/moon'
 import type { GeoPoint } from '../geodesy/geodesy'
 
-/** Un istante in cui la Luna risulta vicina alla linea di vista cercata. */
-export interface AlignmentCandidate {
-  readonly dateMs: number
+/** Separazione e offset della Luna rispetto a una linea di vista, in gradi. */
+export interface AlignmentOffsets {
   /** Separazione angolare reale Luna ↔ linea di vista, in gradi. */
   readonly separationDeg: number
   /** Offset orizzontale: differenza di azimut in [-180, 180); >0 = Luna a destra della linea (guardando lungo la linea). */
   readonly horizontalOffsetDeg: number
   /** Offset verticale: differenza di altitudine in gradi; >0 = Luna sopra la linea. */
   readonly verticalOffsetDeg: number
+}
+
+/** Un istante in cui la Luna risulta vicina alla linea di vista cercata. */
+export interface AlignmentCandidate extends AlignmentOffsets {
+  readonly dateMs: number
 }
 
 export interface AlignmentSearchParams {
@@ -98,6 +102,30 @@ export function angularSeparationDeg(
 }
 
 /**
+ * Misura pura della Luna rispetto a una linea di vista all'istante della
+ * posizione data: separazione angolare reale, offset orizzontale (Δazimut
+ * sull'orizzonte, sovrastima a quote alte) e verticale (Δaltitudine). È la
+ * stessa misura dei candidati della ricerca (candidateFrom) e il readout
+ * «Allineamento ora» del box Dati (T-045).
+ */
+export function alignmentDegs(
+  losAzimuthDeg: number,
+  losAltitudeDeg: number,
+  moon: MoonTopocentric,
+): AlignmentOffsets {
+  return {
+    separationDeg: angularSeparationDeg(
+      losAzimuthDeg,
+      losAltitudeDeg,
+      moon.azimuthDeg,
+      moon.altitudeDeg,
+    ),
+    horizontalOffsetDeg: azimuthDifferenceDeg(losAzimuthDeg, moon.azimuthDeg),
+    verticalOffsetDeg: moon.altitudeDeg - losAltitudeDeg,
+  }
+}
+
+/**
  * Cerca, campionando il tempo, i istanti in cui la Luna passa entro
  * `toleranceDeg` dalla linea di vista Observer→Target. Ricerca in due fasi:
  * 1. scansione coarse al passo `stepMinutes` — un intervallo [tᵢ, tᵢ₊₁] può
@@ -121,14 +149,7 @@ export function searchMoonAlignments(params: AlignmentSearchParams): AlignmentCa
 
   const candidateFrom = (dateMs: number, moon: MoonTopocentric): AlignmentCandidate => ({
     dateMs,
-    separationDeg: angularSeparationDeg(
-      params.losAzimuthDeg,
-      params.losAltitudeDeg,
-      moon.azimuthDeg,
-      moon.altitudeDeg,
-    ),
-    horizontalOffsetDeg: azimuthDifferenceDeg(params.losAzimuthDeg, moon.azimuthDeg),
-    verticalOffsetDeg: moon.altitudeDeg - params.losAltitudeDeg,
+    ...alignmentDegs(params.losAzimuthDeg, params.losAltitudeDeg, moon),
   })
 
   const samples: AlignmentCandidate[] = []

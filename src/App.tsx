@@ -15,8 +15,10 @@ import { buildMeasurements, type MeasurementRow } from './planning/measurements'
 import {
   DEFAULT_ALIGNMENT_DAYS,
   DEFAULT_ALIGNMENT_SEARCH,
+  alignmentDegs,
   searchMoonAlignments,
   type AlignmentCandidate,
+  type AlignmentOffsets,
 } from './planning/alignment'
 import { formatAngleDeg, formatDistanceM } from './planning/format'
 import {
@@ -202,15 +204,15 @@ function formatPoint(point: GeoPoint): string {
 }
 
 /** Offset rispetto alla linea di vista in italiano, con segno esplicito. */
-function describeAlignmentOffsets(candidate: AlignmentCandidate): string {
+function describeAlignmentOffsets(offsets: AlignmentOffsets): string {
   const horizontal =
-    Math.abs(candidate.horizontalOffsetDeg) < 0.005
+    Math.abs(offsets.horizontalOffsetDeg) < 0.005
       ? 'in azimut'
-      : `${formatAngleDeg(Math.abs(candidate.horizontalOffsetDeg), 2)} ${candidate.horizontalOffsetDeg > 0 ? 'a destra' : 'a sinistra'}`
+      : `${formatAngleDeg(Math.abs(offsets.horizontalOffsetDeg), 2)} ${offsets.horizontalOffsetDeg > 0 ? 'a destra' : 'a sinistra'}`
   const vertical =
-    Math.abs(candidate.verticalOffsetDeg) < 0.005
+    Math.abs(offsets.verticalOffsetDeg) < 0.005
       ? 'in quota'
-      : `${formatAngleDeg(Math.abs(candidate.verticalOffsetDeg), 2)} ${candidate.verticalOffsetDeg > 0 ? 'sopra' : 'sotto'}`
+      : `${formatAngleDeg(Math.abs(offsets.verticalOffsetDeg), 2)} ${offsets.verticalOffsetDeg > 0 ? 'sopra' : 'sotto'}`
   return `${horizontal} · ${vertical}`
 }
 
@@ -290,6 +292,32 @@ export default function App() {
       { label: 'Luna · Altitudine', value: formatAngleDeg(moon.altitudeDeg) },
       { label: 'Luna · Distanza', value: formatDistanceM(moon.distanceM) },
       { label: 'Luna · Diametro', value: formatAngleDeg(moon.angularDiameterDeg, 4) },
+    ]
+  }
+
+  /**
+   * Riga «Allineamento ora» del box Dati (T-045): la stessa misura dei
+   * candidati della ricerca (alignmentDegs), valutata sull'orario effettivo.
+   * Nascosta se Observer e Target coincidono (linea di vista indefinita).
+   */
+  function buildAlignmentNowRows(observerPoint: GeoPoint, targetPoint: GeoPoint): MeasurementRow[] {
+    const moon = moonTopocentric(observerPoint, effectiveDate)
+    let offsets: AlignmentOffsets | null = null
+    try {
+      offsets = alignmentDegs(
+        lineOfSightAzimuthDeg(observerPoint, targetPoint),
+        verticalAngleDeg(observerPoint, targetPoint),
+        moon,
+      )
+    } catch {
+      // Punti coincidenti: righe nascoste (la nota esplicita è nella finestra di ricerca).
+    }
+    if (offsets === null) {
+      return []
+    }
+    return [
+      { label: 'Allineamento ora · Separazione', value: formatAngleDeg(offsets.separationDeg, 2) },
+      { label: 'Allineamento ora · Offset', value: describeAlignmentOffsets(offsets) },
     ]
   }
 
@@ -633,6 +661,12 @@ export default function App() {
                   {row.label}: <strong>{row.value}</strong>
                 </div>
               ))}
+              {observer !== null && target !== null &&
+                buildAlignmentNowRows(observer, target).map((row) => (
+                  <div key={row.label} style={ROW_STYLE}>
+                    {row.label}: <strong>{row.value}</strong>
+                  </div>
+                ))}
               {observer === null && target !== null && (
                 <div style={ROW_STYLE}>Posiziona l'Osservatore per i valori della Luna.</div>
               )}
