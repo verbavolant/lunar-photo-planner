@@ -179,7 +179,7 @@ Due dettagli operativi:
 1. **"avanti/destra" non sono il nord:** sono avanti/destra *rispetto a dove stai guardando*. Se ruoti la camera, cambia anche il significato dei quattro pulsanti. Per riferimenti stabili usa la vista `Sopra Observer · 100 m` (nord in alto).
 2. **Il suolo di riferimento è quello del clic** e non viene rimisurato quando ti sposti in orizzontale o in verticale: se ti sposti su un terreno molto diverso (da piazza a colle), riposiziona l'Osservatore con un nuovo clic, così `Altezza dal suolo` riparte da 0 sul nuovo punto.
 
-### 6.5 Card "Dati" (misure + Luna)
+### 6.5 Card "Dati" (misure, Luna, allineamento ora)
 
 Compare appena posizioni almeno un punto. Senza Osservatore mostra solo il suggerimento `Posiziona l'Osservatore per i valori della Luna.`
 
@@ -202,6 +202,15 @@ Compare appena posizioni almeno un punto. Senza Osservatore mostra solo il sugge
 | `Luna · Altitudine` | altezza sopra l'orizzonte; **negativa = Luna sotto l'orizzonte** (non fotografabile) |
 | `Luna · Distanza` | distanza reale Osservatore → Luna (varia nel mese: perigeo/apogeo) |
 | `Luna · Diametro` | diametro angolare apparente in gradi (è la "dimensione" della Luna nel cielo in quell'istante) |
+
+**Blocco Allineamento ora** (serve **tutti e due** i punti):
+
+| Riga | Valore |
+|---|---|
+| `Allineamento ora · Separazione` | distanza angolare reale tra il **centro della Luna** e la **linea di vista Osservatore→Target** all'orario in uso: è la stessa misura `sep` dei risultati della ricerca (§6.6); più è piccola, più la Luna è centrata sulla linea |
+| `Allineamento ora · Offset` | scarto della Luna dalla linea, **stessa notazione** delle righe risultato (es. `0,11° a destra · 0,29° sopra`; `in azimut`/`in quota` = scarto nullo su quell'asse, < 0,005°) |
+
+Serve a verificare l'allineamento **all'orario corrente** senza aprire la ricerca: le righe si aggiornano con lo slider, i pulsanti `±1 min` e quando adotti un candidato. Se Observer e Target coincidono le righe non compaiono (linea di vista indefinita).
 
 I numeri sono formattati all'italiana (virgola decimale, punto per le migliaia). Se una riga mostra `—` il valore non è calcolabile in quel momento: vedi [§11](#11-messaggi-a-schermo-e-problemi-frequenti).
 
