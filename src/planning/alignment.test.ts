@@ -17,6 +17,16 @@ const OBSERVER: GeoPoint = { latitudeDeg: 45.5, longitudeDeg: 10.22, heightM: 0 
 // passa esattamente per la Luna in quell'istante (per costruzione).
 const CROSSING_UTC_MS = Date.UTC(2026, 0, 21, 12, 0, 0)
 
+// Attraversamento SOTTO l'orizzonte (probe T-047 del 2026-10-21): il
+// 2026-03-06T18:54Z la Luna è a az 89,7835°, alt −19,9532° (< 0) dall'OBSERVER.
+// Con declinazione negativa la Luna attraversa l'azimut est sotto l'orizzonte
+// (a az 90° l'altitudine d'attraversamento è arcsin(sin δ / sin φ)). Linea di
+// vista = quei valori: il passaggio esiste ma con la soglia predefinita 0 va
+// scartato e conteggiato.
+const BELOW_CROSSING_UTC_MS = Date.UTC(2026, 2, 6, 18, 54, 0)
+const BELOW_CROSSING_AZ_DEG = 89.7835
+const BELOW_CROSSING_ALT_DEG = -19.9532
+
 describe('azimuthDifferenceDeg — differenza di azimut portata in (-180, 180]', () => {
   it('positiva quando il secondo azimut è più a est (senso orario)', () => {
     expect(azimuthDifferenceDeg(350, 10)).toBe(20)
@@ -89,6 +99,7 @@ describe('alignmentDegs — misura pura Luna ↔ linea di vista', () => {
       durationHours: 2,
       stepMinutes: 1,
       toleranceDeg: 0.5,
+      minMoonAltitudeDeg: 0,
       maxResults: 5,
     })
     const best = results[0]
@@ -105,7 +116,7 @@ describe('alignmentDegs — misura pura Luna ↔ linea di vista', () => {
 
 describe('searchMoonAlignments — attraversamenti reali della linea di vista', () => {
   it('trova l\u2019attraversamento noto (Horizons 2026-01-21T12:00Z) entro 2 minuti', () => {
-    const { candidates: results, totalFound } = searchMoonAlignments({
+    const { candidates: results, totalFound, discardedBelowHorizon } = searchMoonAlignments({
       observer: OBSERVER,
       losAzimuthDeg: 152.829983,
       losAltitudeDeg: 28.685969,
@@ -113,11 +124,14 @@ describe('searchMoonAlignments — attraversamenti reali della linea di vista', 
       durationHours: 2,
       stepMinutes: 1,
       toleranceDeg: 0.5,
+      minMoonAltitudeDeg: 0,
       maxResults: 5,
     })
 
     expect(results.length).toBeGreaterThanOrEqual(1)
     expect(totalFound).toBeGreaterThanOrEqual(results.length)
+    // Il passaggio noto è sopra l'orizzonte (alt 28,7°): nessuno scarto.
+    expect(discardedBelowHorizon).toBe(0)
     // Un passaggio produce UN candidato: nessun duplicato a distanza di passo.
     for (let index = 1; index < results.length; index++) {
       const previous = results[index - 1]
@@ -155,10 +169,12 @@ describe('searchMoonAlignments — attraversamenti reali della linea di vista', 
       durationHours: 3,
       stepMinutes: 5,
       toleranceDeg: 0.5,
+      minMoonAltitudeDeg: 0,
       maxResults: 5,
     })
     expect(result.candidates).toEqual([])
     expect(result.totalFound).toBe(0)
+    expect(result.discardedBelowHorizon).toBe(0)
   })
 
   it('default esportati per l\u2019anteprima UI (finestra 2 mesi, passo coarse 15\u2032)', () => {
@@ -166,6 +182,7 @@ describe('searchMoonAlignments — attraversamenti reali della linea di vista', 
       durationHours: 1440,
       stepMinutes: 15,
       toleranceDeg: 5,
+      minMoonAltitudeDeg: 0,
       maxResults: 8,
     })
   })
@@ -182,6 +199,7 @@ describe('searchMoonAlignments — attraversamenti reali della linea di vista', 
       durationHours: 2,
       stepMinutes: 30,
       toleranceDeg: 0.5,
+      minMoonAltitudeDeg: 0,
       maxResults: 5,
     })
 
@@ -203,6 +221,8 @@ describe('searchMoonAlignments — attraversamenti reali della linea di vista', 
     // Finestra lunga (60 giorni, il default) e tolleranza larga: più passaggi
     // distinti, così ranking e troncamento agiscono insieme (il passaggio
     // noto è in finestra). Verificato 2026-10-21: 8 passaggi trovati, 3 mostrati.
+    // Soglia −90°: il ranking si verifica indipendente dal filtro orizzonte
+    // (T-047), che ha i suoi test dedicati.
     const result = searchMoonAlignments({
       observer: OBSERVER,
       losAzimuthDeg: 152.829983,
@@ -211,6 +231,7 @@ describe('searchMoonAlignments — attraversamenti reali della linea di vista', 
       durationHours: 24 * 60,
       stepMinutes: 15,
       toleranceDeg: 5,
+      minMoonAltitudeDeg: -90,
       maxResults: 3,
     })
 
@@ -227,5 +248,46 @@ describe('searchMoonAlignments — attraversamenti reali della linea di vista', 
         expect(current.dateMs).toBeGreaterThanOrEqual(previous.dateMs)
       }
     }
+  })
+
+  it('scarta i passaggi con la Luna sotto l\u2019orizzonte e li conta (T-047)', () => {
+    // L'unico passaggio in finestra è sotto l'orizzonte: con la soglia
+    // predefinita 0 il risultato è vuoto e lo scarto è conteggiato.
+    const discarded = searchMoonAlignments({
+      observer: OBSERVER,
+      losAzimuthDeg: BELOW_CROSSING_AZ_DEG,
+      losAltitudeDeg: BELOW_CROSSING_ALT_DEG,
+      fromDateMs: BELOW_CROSSING_UTC_MS,
+      durationHours: 2,
+      stepMinutes: 1,
+      toleranceDeg: 0.5,
+      minMoonAltitudeDeg: 0,
+      maxResults: 5,
+    })
+    expect(discarded.candidates).toEqual([])
+    expect(discarded.totalFound).toBe(0)
+    expect(discarded.discardedBelowHorizon).toBe(1)
+
+    // Stessa ricerca senza filtro (soglia −90, ammessa perché negativa): il
+    // passaggio c'è, quindi la lista vuota sopra è effetto del filtro, non
+    // assenza di attraversamenti.
+    const admitted = searchMoonAlignments({
+      observer: OBSERVER,
+      losAzimuthDeg: BELOW_CROSSING_AZ_DEG,
+      losAltitudeDeg: BELOW_CROSSING_ALT_DEG,
+      fromDateMs: BELOW_CROSSING_UTC_MS,
+      durationHours: 2,
+      stepMinutes: 1,
+      toleranceDeg: 0.5,
+      minMoonAltitudeDeg: -90,
+      maxResults: 5,
+    })
+    expect(admitted.totalFound).toBe(1)
+    const first = admitted.candidates[0]
+    if (first === undefined) {
+      throw new Error('Nessun candidato trovato')
+    }
+    expect(Math.abs(first.dateMs - BELOW_CROSSING_UTC_MS)).toBeLessThanOrEqual(2 * 60_000)
+    expect(first.separationDeg).toBeLessThan(0.25)
   })
 })

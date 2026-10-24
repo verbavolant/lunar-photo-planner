@@ -450,6 +450,7 @@ export default function App() {
         durationHours: alignmentDays * 24,
         stepMinutes: alignmentStepMin,
         toleranceDeg: alignmentToleranceDeg,
+        minMoonAltitudeDeg: DEFAULT_ALIGNMENT_SEARCH.minMoonAltitudeDeg,
         maxResults: DEFAULT_ALIGNMENT_SEARCH.maxResults,
       }),
     )
@@ -768,6 +769,15 @@ export default function App() {
                     {alignmentSearch.candidates.length} (i migliori per separazione)
                   </div>
                 )}
+              {alignmentSearch !== null && alignmentSearch.discardedBelowHorizon > 0 && (
+                <div style={ROW_STYLE}>
+                  {alignmentSearch.discardedBelowHorizon}{' '}
+                  {alignmentSearch.discardedBelowHorizon === 1
+                    ? 'passaggio scartato'
+                    : 'passaggi scartati'}{' '}
+                  (Luna sotto l'orizzonte)
+                </div>
+              )}
               {alignmentSearch?.candidates.map((candidate) => (
                 <button
                   key={candidate.dateMs}

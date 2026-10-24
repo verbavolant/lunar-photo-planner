@@ -213,9 +213,9 @@ Si apre con `Allineamenti Luna` (Osservatore e Target entrambi posizionati). Int
 |---|---|---|---|
 | `Finestra (giorni)` | 1–365 | 60 | giorni esplorati a partire dall'orario in uso |
 | `Passo (min)` | 1–60 | 15 | campionamento della ricerca (più piccolo = più lento ma più fine) |
-| `Tolleranza (°)` | 0,05–5 (passi 0,05) | 1 | separazione angolare massima per considerare la Luna "sulla linea" |
+| `Tolleranza (°)` | 0,05–10 (passi 0,05) | 5 | separazione angolare massima per considerare la Luna "sulla linea" |
 
-Sotto i parametri compare `Ricerca da <data/ora locale> · max 8 risultati`: la ricerca **parte dal Tempo effettivo corrente** e restituisce al massimo 8 candidati.
+Sotto i parametri compare `Ricerca da <data/ora locale> · max 8 risultati`: la ricerca **parte dal Tempo effettivo corrente** e restituisce al massimo 8 candidati, **i migliori per separazione**. Se trova più passaggi di quanti ne mostra compare `Trovati N passaggi · mostro i primi M (i migliori per separazione)`; se alcuni passaggi hanno la Luna sotto l'orizzonte compare anche `N passaggi scartati (Luna sotto l'orizzonte)`. Dopo l'adozione di un candidato l'etichetta `Ricerca da` continua a mostrare l'orario da cui è partita la ricerca in elenco.
 
 Ogni riga risultato è un pulsante cliccabile:
 
@@ -233,7 +233,7 @@ fase 96% C (crescente)
 | `in azimut` / `in quota` | scarto praticamente nullo su quell'asse (< 0,005°): la Luna è centrata |
 | `fase 96% C (crescente)` | fase lunare in quell'istante |
 
-**Cliccare una riga adotta quell'istante:** `Data/ora` viene impostato, lo slider torna a 0, la finestra si chiude e tutto il resto (Luna in scena, card Fase lunare, righe **Luna ·**) si ricalcola su quell'ora.
+**Cliccare una riga adotta quell'istante:** `Data/ora` viene impostato, lo slider torna a 0 e tutto il resto (Luna in scena, card Fase lunare, righe **Luna ·**) si ricalcola su quell'ora. **La finestra resta aperta** con l'elenco: puoi adottare un altro istante senza ripetere la ricerca; `Ricalcola` riparte dall'orario appena adottato.
 
 ### 6.7 Card "Tempo" (fascia in basso, tutta larghezza)
 
@@ -316,13 +316,13 @@ La ricerca campiona il tempo e cerca gli istanti in cui il **centro del disco lu
 
 | Situazione | `Finestra (giorni)` | `Passo (min)` | `Tolleranza (°)` |
 |---|---|---|---|
-| Ricognizione rapida: "esiste un giorno buono?" | 60–365 | 15 | 1 |
+| Ricognizione rapida: "esiste un giorno buono?" | 60–365 | 15 | 1–5 |
 | Cercare l'istante al minuto | 1–7 attorno alla data trovata | 1–5 | 0,2–0,5 |
 | Allineamento stretto (Luna centrata su un'apertura) | 1–14 | 1 | 0,05–0,15 |
 
 - La **tolleranza** è la separazione angolare massima tra centro della Luna e linea: 1° vuol dire "entro circa due diametri lunari".
 - Per la Luna **appoggiata sopra** la cima non cercare la tolleranza minima: lasciala comoda (≈ 0,5–1°) e scegli tra i risultati la riga con `sopra` ≈ metà del valore di `Luna · Diametro`.
-- Vengono restituiti **al massimo 8 risultati**: con finestra lunga e tolleranza ampia gli 8 candidati possono esaurire i giorni più vicini. Per vedere gli istanti successivi restringi la finestra, oppure avanza l'orario di partenza e premi `Ricalcola`.
+- Vengono restituiti **al massimo 8 risultati, i migliori per separazione** (non i più vicini nel tempo): la riga `Trovati N passaggi · mostro i primi M` ti dice quanti passaggi contiene la finestra. Per vederne altri restringi la finestra o la tolleranza, oppure avanza l'orario di partenza e premi `Ricalcola`.
 
 ### 8.3 Leggere e adottare i risultati
 
@@ -334,9 +334,11 @@ La ricerca campiona il tempo e cerca gli istanti in cui il **centro del disco lu
 | `sopra` / `sotto` | scegli il distacco verticale che ti serve: 0 per centrare, metà diametro per appoggiare sopra |
 | `fase 96% C (crescente)` | utile per decidere: una falce sottilissima non mostra i dettagli del soggetto in controluce |
 | `Nessun allineamento nella finestra cercata.` | allarga `Tolleranza (°)` o `Finestra (giorni)`; se persiste, la Luna non passa mai a quell'azimut: verifica `Azimut iniziale` |
+| `Trovati N passaggi · mostro i primi M (i migliori per separazione)` | la finestra contiene più passaggi di quanti ne mostra: gli M in lista sono quelli con `sep` più piccolo |
+| `N passaggi scartati (Luna sotto l'orizzonte)` | passaggi trovati ma esclusi perché la Luna era sotto l'orizzonte (non fotografabili); il conteggio include i passaggi che altrimenti apparirebbero in lista |
 | `Linea di vista indefinita: Observer e Target coincidono.` | i due punti sono sovrapposti: riposiziona l'Osservatore o il Target |
 
-**Clicca la riga** per adottare l'istante: `Data/ora` si aggiorna, lo slider va a 0, la finestra si chiude; card **Fase lunare** e righe **Luna ·** si ricalcolano su quell'istante.
+**Clicca la riga** per adottare l'istante: `Data/ora` si aggiorna, lo slider va a 0, la finestra resta aperta con l'elenco (puoi adottarne un altro subito); card **Fase lunare** e righe **Luna ·** si ricalcolano su quell'istante.
 
 ### 8.4 Verifica finale in 3D (passaggio consigliato)
 

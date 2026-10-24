@@ -18,10 +18,12 @@ export interface AlignmentCandidate extends AlignmentOffsets {
 
 /** Risultato della ricerca: candidati selezionati + totale passaggi trovati. */
 export interface AlignmentSearchResult {
-  /** Passaggi trovati, ordinati per separazione crescente (tie-break per data), al più `maxResults`. */
+  /** Passaggi ammessi, ordinati per separazione crescente (tie-break per data), al più `maxResults`. */
   readonly candidates: AlignmentCandidate[]
-  /** Numero totale di passaggi trovati nella finestra, prima del troncamento a `maxResults`. */
+  /** Numero totale di passaggi ammessi nella finestra, prima del troncamento a `maxResults`. */
   readonly totalFound: number
+  /** Passaggi scartati perché la Luna era sotto `minMoonAltitudeDeg` (T-047). */
+  readonly discardedBelowHorizon: number
 }
 
 export interface AlignmentSearchParams {
@@ -38,6 +40,12 @@ export interface AlignmentSearchParams {
   readonly stepMinutes: number
   /** Separazione massima per considerare "allineato", in gradi. */
   readonly toleranceDeg: number
+  /**
+   * Altitudine minima della Luna perché un passaggio sia ammesso, in gradi:
+   * default 0 (scartati i passaggi con la Luna sotto l'orizzonte), valori
+   * negativi ammessi per ricerche «fisiche» senza filtro (T-047).
+   */
+  readonly minMoonAltitudeDeg: number
   /** Numero massimo di candidati restituiti. */
   readonly maxResults: number
 }
@@ -62,6 +70,7 @@ export const DEFAULT_ALIGNMENT_SEARCH = {
   durationHours: DEFAULT_ALIGNMENT_DAYS * 24,
   stepMinutes: 15,
   toleranceDeg: 5,
+  minMoonAltitudeDeg: 0,
   maxResults: 8,
 } as const
 
@@ -137,6 +146,14 @@ export function alignmentDegs(
 }
 
 /**
+ * Campione interno della ricerca: aggiunge l'altitudine della Luna al
+ * campione, serve al filtro orizzonte (T-047) e non compare nel risultato.
+ */
+interface PassageCandidate extends AlignmentCandidate {
+  readonly moonAltitudeDeg: number
+}
+
+/**
  * Cerca, campionando il tempo, i istanti in cui la Luna passa entro
  * `toleranceDeg` dalla linea di vista Observer→Target. Ricerca in due fasi:
  * 1. scansione coarse al passo `stepMinutes` — un intervallo [tᵢ, tᵢ₊₁] può
@@ -151,9 +168,12 @@ export function alignmentDegs(
  * la differenza di azimut misurata sull'orizzonte, quindi a quote elevate
  * sovrastima lo scostamento sulla sfera; la separazione è la distanza
  * angolare reale.
+ * I passaggi con la Luna sotto `minMoonAltitudeDeg` sono scartati e contati
+ * in `discardedBelowHorizon` (T-047): il filtro usa l'altitudine del campione
+ * a separazione minima del passaggio, cioè del candidato.
  * Risultato: candidati ordinati per separazione crescente (tie-break per
  * data) e troncati a `maxResults`; `totalFound` è il numero di passaggi
- * trovati nella finestra prima del troncamento.
+ * ammessi nella finestra prima del troncamento.
  */
 export function searchMoonAlignments(params: AlignmentSearchParams): AlignmentSearchResult {
   const stepMs = params.stepMinutes * 60_000
@@ -161,12 +181,13 @@ export function searchMoonAlignments(params: AlignmentSearchParams): AlignmentSe
   const fineMs = Math.round(refineStepMinutes(params.toleranceDeg) * 60_000)
   const coarseMarginDeg = (MAX_MOON_APPARENT_SPEED_DEG_PER_MIN * params.stepMinutes) / 2
 
-  const candidateFrom = (dateMs: number, moon: MoonTopocentric): AlignmentCandidate => ({
+  const candidateFrom = (dateMs: number, moon: MoonTopocentric): PassageCandidate => ({
     dateMs,
     ...alignmentDegs(params.losAzimuthDeg, params.losAltitudeDeg, moon),
+    moonAltitudeDeg: moon.altitudeDeg,
   })
 
-  const samples: AlignmentCandidate[] = []
+  const samples: PassageCandidate[] = []
   let previous: { dateMs: number; separationDeg: number } | null = null
   for (let dateMs = params.fromDateMs; dateMs <= endMs; dateMs += stepMs) {
     const moon = moonTopocentric(params.observer, new Date(dateMs))
@@ -192,10 +213,10 @@ export function searchMoonAlignments(params: AlignmentSearchParams): AlignmentSe
     previous = { dateMs, separationDeg: candidate.separationDeg }
   }
 
-  const candidates: AlignmentCandidate[] = []
-  let window: AlignmentCandidate[] = []
+  const candidates: PassageCandidate[] = []
+  let window: PassageCandidate[] = []
   const flushWindow = (): void => {
-    let best: AlignmentCandidate | null = null
+    let best: PassageCandidate | null = null
     for (const sample of window) {
       if (best === null || sample.separationDeg < best.separationDeg) {
         best = sample
@@ -215,12 +236,32 @@ export function searchMoonAlignments(params: AlignmentSearchParams): AlignmentSe
   }
   flushWindow()
 
+  // Filtro orizzonte (T-047): scartati i passaggi con la Luna sotto la soglia
+  // (default 0: sotto l'orizzonte; confronto stretto, alt = soglia è scartato).
+  // Gli ammessi perdono il campo interno con l'altitudine del campione; il
+  // conteggio degli scarti torna alla UI per la nota «Luna sotto l'orizzonte».
+  const admitted: AlignmentCandidate[] = []
+  let discardedBelowHorizon = 0
+  for (const passage of candidates) {
+    if (passage.moonAltitudeDeg > params.minMoonAltitudeDeg) {
+      admitted.push({
+        dateMs: passage.dateMs,
+        separationDeg: passage.separationDeg,
+        horizontalOffsetDeg: passage.horizontalOffsetDeg,
+        verticalOffsetDeg: passage.verticalOffsetDeg,
+      })
+    } else {
+      discardedBelowHorizon++
+    }
+  }
+
   // Ranking: in cima il passaggio con separazione minima; parimerito → il
   // primo in tempo. `totalFound` permette alla UI di dire quanti passaggi
   // il limite `maxResults` ha nascosto.
-  candidates.sort((a, b) => a.separationDeg - b.separationDeg || a.dateMs - b.dateMs)
+  admitted.sort((a, b) => a.separationDeg - b.separationDeg || a.dateMs - b.dateMs)
   return {
-    candidates: candidates.slice(0, params.maxResults),
-    totalFound: candidates.length,
+    candidates: admitted.slice(0, params.maxResults),
+    totalFound: admitted.length,
+    discardedBelowHorizon,
   }
 }
