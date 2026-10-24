@@ -270,10 +270,11 @@ export default function App() {
   const [sliderOffsetMin, setSliderOffsetMin] = useState(0)
   const [alignmentWindowOpen, setAlignmentWindowOpen] = useState(false)
   const [alignmentSearch, setAlignmentSearch] = useState<AlignmentSearchResult | null>(null)
-  // Istante di partenza dell'ultima ricerca (T-046b): dopo l'adozione di un
-  // candidato l'orario effettivo cambia, ma l'elenco mostrato resta quello
-  // della ricerca; l'etichetta «Ricerca da» segue l'elenco, non l'orario.
-  const [alignmentSearchFromMs, setAlignmentSearchFromMs] = useState<number | null>(null)
+  // Campo «Ricerca da» (T-048): istante di partenza della ricerca, editabile
+  // anche nel passato. Vuoto/invalido → si parte dall'orario effettivo e il
+  // valore usato torna nel campo; dopo l'adozione resta com'è, così l'elenco
+  // mostrato corrisponde sempre al campo.
+  const [alignmentFromInput, setAlignmentFromInput] = useState('')
   const [alignmentNote, setAlignmentNote] = useState<string | null>(null)
   const [alignmentDays, setAlignmentDays] = useState(DEFAULT_ALIGNMENT_DAYS)
   const [alignmentStepMin, setAlignmentStepMin] = useState<number>(
@@ -427,6 +428,14 @@ export default function App() {
     if (observer === null || target === null) {
       return
     }
+    // «Ricerca da» (T-048): campo vuoto o invalido → si parte dall'orario
+    // effettivo e il valore usato torna nel campo; altrimenti la ricerca usa
+    // il campo così com'è (anche nel passato).
+    const fromInputMs = localInputValueToMs(alignmentFromInput)
+    const fromMs = Number.isNaN(fromInputMs) ? effectiveDate.getTime() : fromInputMs
+    if (Number.isNaN(fromInputMs)) {
+      setAlignmentFromInput(dateToLocalInputValue(new Date(fromMs)))
+    }
     let losAzimuth: number
     let losAltitude: number
     try {
@@ -435,18 +444,16 @@ export default function App() {
     } catch {
       setAlignmentNote('Linea di vista indefinita: Observer e Target coincidono.')
       setAlignmentSearch(null)
-      setAlignmentSearchFromMs(null)
       setAlignmentWindowOpen(true)
       return
     }
     setAlignmentNote(null)
-    setAlignmentSearchFromMs(effectiveDate.getTime())
     setAlignmentSearch(
       searchMoonAlignments({
         observer,
         losAzimuthDeg: losAzimuth,
         losAltitudeDeg: losAltitude,
-        fromDateMs: effectiveDate.getTime(),
+        fromDateMs: fromMs,
         durationHours: alignmentDays * 24,
         stepMinutes: alignmentStepMin,
         toleranceDeg: alignmentToleranceDeg,
@@ -528,7 +535,7 @@ export default function App() {
           onClick={runAlignmentSearch}
           style={BUTTON_STYLE}
           disabled={observer === null || target === null}
-          title="Cerca i prossimi istanti in cui la Luna passa sulla linea Observer→Target"
+          title="Cerca gli istanti in cui la Luna passa sulla linea Observer→Target, dal campo «Ricerca da» in avanti"
         >
           Allineamenti Luna
         </button>
@@ -687,7 +694,7 @@ export default function App() {
                 <button
                   onClick={runAlignmentSearch}
                   style={BUTTON_STYLE}
-                  title="Ripete la ricerca con i parametri e il tempo attuali"
+                  title="Ripete la ricerca con i parametri e la data «Ricerca da» attuali"
                 >
                   Ricalcola
                 </button>
@@ -751,11 +758,18 @@ export default function App() {
                     style={NUMBER_INPUT_STYLE}
                   />
                 </label>
+                <label style={PARAM_LABEL_STYLE}>
+                  Ricerca da
+                  <input
+                    type="datetime-local"
+                    value={alignmentFromInput}
+                    onChange={(event) => setAlignmentFromInput(event.target.value)}
+                    title="Istante di partenza della ricerca, anche nel passato; la fine è inizio + Finestra (giorni)"
+                  />
+                </label>
               </div>
               <div style={ROW_STYLE}>
-                Ricerca da{' '}
-                {formatLocalDateTime(new Date(alignmentSearchFromMs ?? effectiveDate.getTime()))}{' '}
-                · max {DEFAULT_ALIGNMENT_SEARCH.maxResults} risultati
+                max {DEFAULT_ALIGNMENT_SEARCH.maxResults} risultati per ricerca
               </div>
               {alignmentNote !== null && <div style={ROW_STYLE}>{alignmentNote}</div>}
               {alignmentNote === null && alignmentSearch !== null &&

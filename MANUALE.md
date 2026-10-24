@@ -214,8 +214,9 @@ Si apre con `Allineamenti Luna` (Osservatore e Target entrambi posizionati). Int
 | `Finestra (giorni)` | 1–365 | 60 | giorni esplorati a partire dall'orario in uso |
 | `Passo (min)` | 1–60 | 15 | campionamento della ricerca (più piccolo = più lento ma più fine) |
 | `Tolleranza (°)` | 0,05–10 (passi 0,05) | 5 | separazione angolare massima per considerare la Luna "sulla linea" |
+| `Ricerca da` | data/ora locale, anche nel passato | orario effettivo al primo avvio | istante di partenza della ricerca; la fine è inizio + `Finestra (giorni)` |
 
-Sotto i parametri compare `Ricerca da <data/ora locale> · max 8 risultati`: la ricerca **parte dal Tempo effettivo corrente** e restituisce al massimo 8 candidati, **i migliori per separazione**. Se trova più passaggi di quanti ne mostra compare `Trovati N passaggi · mostro i primi M (i migliori per separazione)`; se alcuni passaggi hanno la Luna sotto l'orizzonte compare anche `N passaggi scartati (Luna sotto l'orizzonte)`. Dopo l'adozione di un candidato l'etichetta `Ricerca da` continua a mostrare l'orario da cui è partita la ricerca in elenco.
+Il campo `Ricerca da` (data/ora locale, **anche nel passato**) è l'istante di partenza della ricerca: al primo avvio contiene l'orario effettivo; la fine della finestra è inizio + `Finestra (giorni)`. La ricerca restituisce al massimo 8 candidati, **i migliori per separazione**. Se trova più passaggi di quanti ne mostra compare `Trovati N passaggi · mostro i primi M (i migliori per separazione)`; se alcuni passaggi hanno la Luna sotto l'orizzonte compare anche `N passaggi scartati (Luna sotto l'orizzonte)`. Dopo l'adozione il campo resta com'è, così l'elenco mostrato corrisponde sempre al campo: per cercare da un altro istante modificalo e premi `Ricalcola` (se il campo è vuoto o invalido la ricerca parte dall'orario effettivo e il campo torna a mostrarlo).
 
 Ogni riga risultato è un pulsante cliccabile:
 
@@ -233,7 +234,7 @@ fase 96% C (crescente)
 | `in azimut` / `in quota` | scarto praticamente nullo su quell'asse (< 0,005°): la Luna è centrata |
 | `fase 96% C (crescente)` | fase lunare in quell'istante |
 
-**Cliccare una riga adotta quell'istante:** `Data/ora` viene impostato, lo slider torna a 0 e tutto il resto (Luna in scena, card Fase lunare, righe **Luna ·**) si ricalcola su quell'ora. **La finestra resta aperta** con l'elenco: puoi adottare un altro istante senza ripetere la ricerca; `Ricalcola` riparte dall'orario appena adottato.
+**Cliccare una riga adotta quell'istante:** `Data/ora` viene impostato, lo slider torna a 0 e tutto il resto (Luna in scena, card Fase lunare, righe **Luna ·**) si ricalcola su quell'ora. **La finestra resta aperta** con l'elenco: puoi adottare un altro istante senza ripetere la ricerca; `Ricalcola` riparte dal campo `Ricerca da`, non dall'orario adottato.
 
 ### 6.7 Card "Tempo" (fascia in basso, tutta larghezza)
 
@@ -309,7 +310,7 @@ La ricerca campiona il tempo e cerca gli istanti in cui il **centro del disco lu
 ### 8.1 Preparazione
 
 1. Posiziona **Osservatore** e **Target** (il Target va sul punto del soggetto che vuoi "toccare" con la Luna: cima, guglia, arco…).
-2. Imposta un **Tempo effettivo** di partenza sensato (card Tempo): la ricerca parte **da lì**, non da mezzanotte. Se cerchi uno scatto al crepuscolo dei prossimi due mesi, mettiti già su una fascia serale.
+2. Imposta un **Tempo effettivo** di partenza sensato (card Tempo): il campo `Ricerca da` della finestra parte **da lì**, non da mezzanotte. Se cerchi uno scatto al crepuscolo dei prossimi due mesi, mettiti già su una fascia serale; per cercare nel passato modifica direttamente `Ricerca da`.
 3. Premi **`Allineamenti Luna`**.
 
 ### 8.2 Scegliere i parametri
@@ -322,7 +323,7 @@ La ricerca campiona il tempo e cerca gli istanti in cui il **centro del disco lu
 
 - La **tolleranza** è la separazione angolare massima tra centro della Luna e linea: 1° vuol dire "entro circa due diametri lunari".
 - Per la Luna **appoggiata sopra** la cima non cercare la tolleranza minima: lasciala comoda (≈ 0,5–1°) e scegli tra i risultati la riga con `sopra` ≈ metà del valore di `Luna · Diametro`.
-- Vengono restituiti **al massimo 8 risultati, i migliori per separazione** (non i più vicini nel tempo): la riga `Trovati N passaggi · mostro i primi M` ti dice quanti passaggi contiene la finestra. Per vederne altri restringi la finestra o la tolleranza, oppure avanza l'orario di partenza e premi `Ricalcola`.
+- Vengono restituiti **al massimo 8 risultati, i migliori per separazione** (non i più vicini nel tempo): la riga `Trovati N passaggi · mostro i primi M` ti dice quanti passaggi contiene la finestra. Per vederne altri restringi la finestra o la tolleranza, oppure sposta in avanti `Ricerca da` e premi `Ricalcola`.
 
 ### 8.3 Leggere e adottare i risultati
 
@@ -416,7 +417,7 @@ Senza chiave o token l'app resta utilizzabile: si naviga sul globo e si posizion
 | `Provider non valido: "xyz" (valori ammessi: google, google-ion (alias: cesium)).` | `?provider=` scritto male | correggi o rimuovi il parametro |
 | `Parametro "tileMaxM" non valido: "abc" (atteso un numero di metri > 0).` | `?tileMaxM=` non numerico o ≤ 0 | correggi; intanto vale il default 1000 m |
 | `Linea di vista indefinita: Observer e Target coincidono.` | hai cliccato lo stesso punto per entrambi | riposiziona uno dei due |
-| `Nessun allineamento nella finestra cercata.` | la Luna non passa entro la tolleranza nella finestra | allarga `Tolleranza (°)` o `Finestra (giorni)` ([§8.3](#83-leggere-e-adottare-i-risultati)) |
+| `Nessun allineamento nella finestra cercata.` | la Luna non passa entro la tolleranza nella finestra | allarga `Tolleranza (°)` o `Finestra (giorni)`, oppure cambia `Ricerca da` ([§8.3](#83-leggere-e-adottare-i-risultati)) |
 | Righe misure con `—` | valore non calcolabile (Observer e Target coincidenti, o quasi antipodali: la geodetica non converge) | allontana i due punti; a distanze intercontinentali alcune righe non sono disponibili |
 
 ### 11.2 Sintomi senza messaggio
