@@ -17,8 +17,8 @@ import {
   DEFAULT_ALIGNMENT_SEARCH,
   alignmentDegs,
   searchMoonAlignments,
-  type AlignmentCandidate,
   type AlignmentOffsets,
+  type AlignmentSearchResult,
 } from './planning/alignment'
 import { formatAngleDeg, formatDistanceM } from './planning/format'
 import {
@@ -269,7 +269,7 @@ export default function App() {
   const [baseDateMs, setBaseDateMs] = useState<number>(() => Date.now())
   const [sliderOffsetMin, setSliderOffsetMin] = useState(0)
   const [alignmentWindowOpen, setAlignmentWindowOpen] = useState(false)
-  const [alignmentResults, setAlignmentResults] = useState<AlignmentCandidate[]>([])
+  const [alignmentSearch, setAlignmentSearch] = useState<AlignmentSearchResult | null>(null)
   const [alignmentNote, setAlignmentNote] = useState<string | null>(null)
   const [alignmentDays, setAlignmentDays] = useState(DEFAULT_ALIGNMENT_DAYS)
   const [alignmentStepMin, setAlignmentStepMin] = useState<number>(
@@ -430,12 +430,12 @@ export default function App() {
       losAltitude = verticalAngleDeg(observer, target)
     } catch {
       setAlignmentNote('Linea di vista indefinita: Observer e Target coincidono.')
-      setAlignmentResults([])
+      setAlignmentSearch(null)
       setAlignmentWindowOpen(true)
       return
     }
     setAlignmentNote(null)
-    setAlignmentResults(
+    setAlignmentSearch(
       searchMoonAlignments({
         observer,
         losAzimuthDeg: losAzimuth,
@@ -749,10 +749,18 @@ export default function App() {
                 {DEFAULT_ALIGNMENT_SEARCH.maxResults} risultati
               </div>
               {alignmentNote !== null && <div style={ROW_STYLE}>{alignmentNote}</div>}
-              {alignmentNote === null && alignmentResults.length === 0 && (
-                <div style={ROW_STYLE}>Nessun allineamento nella finestra cercata.</div>
-              )}
-              {alignmentResults.map((candidate) => (
+              {alignmentNote === null && alignmentSearch !== null &&
+                alignmentSearch.candidates.length === 0 && (
+                  <div style={ROW_STYLE}>Nessun allineamento nella finestra cercata.</div>
+                )}
+              {alignmentSearch !== null &&
+                alignmentSearch.totalFound > alignmentSearch.candidates.length && (
+                  <div style={ROW_STYLE}>
+                    Trovati {alignmentSearch.totalFound} passaggi · mostro i primi{' '}
+                    {alignmentSearch.candidates.length} (i migliori per separazione)
+                  </div>
+                )}
+              {alignmentSearch?.candidates.map((candidate) => (
                 <button
                   key={candidate.dateMs}
                   onClick={() => adoptAlignment(candidate.dateMs)}

@@ -16,6 +16,14 @@ export interface AlignmentCandidate extends AlignmentOffsets {
   readonly dateMs: number
 }
 
+/** Risultato della ricerca: candidati selezionati + totale passaggi trovati. */
+export interface AlignmentSearchResult {
+  /** Passaggi trovati, ordinati per separazione crescente (tie-break per data), al più `maxResults`. */
+  readonly candidates: AlignmentCandidate[]
+  /** Numero totale di passaggi trovati nella finestra, prima del troncamento a `maxResults`. */
+  readonly totalFound: number
+}
+
 export interface AlignmentSearchParams {
   readonly observer: GeoPoint
   /** Azimut della linea di vista Observer→Target, in gradi (0 = nord). */
@@ -140,8 +148,11 @@ export function alignmentDegs(
  * la differenza di azimut misurata sull'orizzonte, quindi a quote elevate
  * sovrastima lo scostamento sulla sfera; la separazione è la distanza
  * angolare reale.
+ * Risultato: candidati ordinati per separazione crescente (tie-break per
+ * data) e troncati a `maxResults`; `totalFound` è il numero di passaggi
+ * trovati nella finestra prima del troncamento.
  */
-export function searchMoonAlignments(params: AlignmentSearchParams): AlignmentCandidate[] {
+export function searchMoonAlignments(params: AlignmentSearchParams): AlignmentSearchResult {
   const stepMs = params.stepMinutes * 60_000
   const endMs = params.fromDateMs + params.durationHours * 3_600_000
   const fineMs = Math.round(refineStepMinutes(params.toleranceDeg) * 60_000)
@@ -201,6 +212,12 @@ export function searchMoonAlignments(params: AlignmentSearchParams): AlignmentCa
   }
   flushWindow()
 
-  candidates.sort((a, b) => a.dateMs - b.dateMs)
-  return candidates.slice(0, params.maxResults)
+  // Ranking: in cima il passaggio con separazione minima; parimerito → il
+  // primo in tempo. `totalFound` permette alla UI di dire quanti passaggi
+  // il limite `maxResults` ha nascosto.
+  candidates.sort((a, b) => a.separationDeg - b.separationDeg || a.dateMs - b.dateMs)
+  return {
+    candidates: candidates.slice(0, params.maxResults),
+    totalFound: candidates.length,
+  }
 }

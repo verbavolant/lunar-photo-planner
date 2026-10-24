@@ -81,7 +81,7 @@ describe('alignmentDegs — misura pura Luna ↔ linea di vista', () => {
   })
 
   it('coerente con i candidati della ricerca sul passaggio noto (Horizons)', () => {
-    const results = searchMoonAlignments({
+    const { candidates: results } = searchMoonAlignments({
       observer: OBSERVER,
       losAzimuthDeg: 152.829983,
       losAltitudeDeg: 28.685969,
@@ -105,7 +105,7 @@ describe('alignmentDegs — misura pura Luna ↔ linea di vista', () => {
 
 describe('searchMoonAlignments — attraversamenti reali della linea di vista', () => {
   it('trova l\u2019attraversamento noto (Horizons 2026-01-21T12:00Z) entro 2 minuti', () => {
-    const results = searchMoonAlignments({
+    const { candidates: results, totalFound } = searchMoonAlignments({
       observer: OBSERVER,
       losAzimuthDeg: 152.829983,
       losAltitudeDeg: 28.685969,
@@ -117,6 +117,7 @@ describe('searchMoonAlignments — attraversamenti reali della linea di vista', 
     })
 
     expect(results.length).toBeGreaterThanOrEqual(1)
+    expect(totalFound).toBeGreaterThanOrEqual(results.length)
     // Un passaggio produce UN candidato: nessun duplicato a distanza di passo.
     for (let index = 1; index < results.length; index++) {
       const previous = results[index - 1]
@@ -146,7 +147,7 @@ describe('searchMoonAlignments — attraversamenti reali della linea di vista', 
     // A lat 45,5° verso nord la Luna (declinazione ≤ ~28,7°) non sale mai oltre
     // ~lat − (90 − dec) ≈ −16°: la direzione (az 0, alt 60) è irraggiungibile,
     // la ricerca deve restare vuota (niente falso positivo numerico).
-    const results = searchMoonAlignments({
+    const result = searchMoonAlignments({
       observer: OBSERVER,
       losAzimuthDeg: 0,
       losAltitudeDeg: 60,
@@ -156,7 +157,8 @@ describe('searchMoonAlignments — attraversamenti reali della linea di vista', 
       toleranceDeg: 0.5,
       maxResults: 5,
     })
-    expect(results).toEqual([])
+    expect(result.candidates).toEqual([])
+    expect(result.totalFound).toBe(0)
   })
 
   it('default esportati per l\u2019anteprima UI (finestra 2 mesi, passo coarse 15\u2032)', () => {
@@ -172,7 +174,7 @@ describe('searchMoonAlignments — attraversamenti reali della linea di vista', 
     // Passo coarse 30′ con partenza 23′ PRIMA dell'attraversamento noto: i
     // campioni coarse più vicini cadono a ~1,8° (12:07) e ~6° (11:37), oltre
     // la tolleranza 0,5° — senza raffinamento la ricerca sarebbe vuota.
-    const results = searchMoonAlignments({
+    const { candidates: results } = searchMoonAlignments({
       observer: OBSERVER,
       losAzimuthDeg: 152.829983,
       losAltitudeDeg: 28.685969,
@@ -195,5 +197,35 @@ describe('searchMoonAlignments — attraversamenti reali della linea di vista', 
     }
     expect(Math.abs(best.dateMs - CROSSING_UTC_MS)).toBeLessThanOrEqual(2 * 60_000)
     expect(best.separationDeg).toBeLessThan(0.3)
+  })
+
+  it('ranking per separazione crescente (tie-break per data) e troncamento a maxResults', () => {
+    // Finestra lunga (60 giorni, il default) e tolleranza larga: più passaggi
+    // distinti, così ranking e troncamento agiscono insieme (il passaggio
+    // noto è in finestra). Verificato 2026-10-21: 8 passaggi trovati, 3 mostrati.
+    const result = searchMoonAlignments({
+      observer: OBSERVER,
+      losAzimuthDeg: 152.829983,
+      losAltitudeDeg: 28.685969,
+      fromDateMs: CROSSING_UTC_MS,
+      durationHours: 24 * 60,
+      stepMinutes: 15,
+      toleranceDeg: 5,
+      maxResults: 3,
+    })
+
+    expect(result.candidates.length).toBe(3)
+    expect(result.totalFound).toBeGreaterThan(result.candidates.length)
+    for (let index = 1; index < result.candidates.length; index++) {
+      const previous = result.candidates[index - 1]
+      const current = result.candidates[index]
+      if (previous === undefined || current === undefined) {
+        continue
+      }
+      expect(current.separationDeg).toBeGreaterThanOrEqual(previous.separationDeg)
+      if (current.separationDeg === previous.separationDeg) {
+        expect(current.dateMs).toBeGreaterThanOrEqual(previous.dateMs)
+      }
+    }
   })
 })
