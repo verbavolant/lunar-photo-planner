@@ -19,7 +19,7 @@
 5. [Primo uso: 7 passi](#5-primo-uso-7-passi)
 6. [Riferimento completo dei comandi](#6-riferimento-completo-dei-comandi)
 7. [Leggere i numeri (con esempi)](#7-leggere-i-numeri-con-esempi)
-8. [Trovare l'istante giusto: Allineamenti Luna](#8-trovare-listante-giusto-allineamenti-luna)
+8. [Trovare l'istante giusto: Cerca allineamenti Luna](#8-trovare-listante-giusto-cerca-allineamenti-luna)
 9. [Parametri nell'URL (`?provider=`, `?tileMaxM=`)](#9-parametri-nellurl-provider-tilemaxm)
 10. [Eseguire l'app in locale](#10-eseguire-lapp-in-locale)
 11. [Messaggi a schermo e problemi frequenti](#11-messaggi-a-schermo-e-problemi-frequenti)
@@ -54,7 +54,7 @@
 | Dispositivo | PC/portatile (o tablet) con browser recente abilitato alla grafica **WebGL** — Chrome, Edge, Firefox, Safari aggiornati. La scena 3D è pesante: serve una connessione veloce (i tile 3D si scaricano durante la navigazione). |
 | Account | **Nessuno**, per usare il sito pubblico. |
 | Chiavi API | **Nessuna**, per usare il sito pubblico. Servono solo se esegui l'app in locale: vedi [§10](#10-eseguire-lapp-in-locale). |
-| Dati tuoi | L'app non salva nulla nel browser e non ha un backend: i punti che posizioni restano in memoria e si perdono ricaricando la pagina. |
+| Dati tuoi | L'app non ha un backend e non invia i tuoi punti da nessuna parte: i punti che posizioni restano in memoria e si perdono ricaricando la pagina. Unica eccezione: la **Home dell'Osservatore** (pulsante `Imposta come Home`) è salvata nel **localStorage** del tuo browser e resta finché non la sovrascrivi con un'altra o cancelli i dati del sito. |
 | Fuso orario | È quello del **tuo browser/device**. Se pianifichi uno scatto in un altro Paese, regola l'orologio del dispositivo o considera lo scostamento. |
 
 ---
@@ -63,19 +63,21 @@
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
-│ BARRETTA COMANDI  Osservatore · Target · Azzera · Vai a Home · Vista Luna│
-│                   · Sopra Observer · 100 m · Allineamenti Luna           │
+│ BARRETTA COMANDI  Osservatore · Target · Azzera · Vai a Home ·           │
+│    Imposta come Home · Vista Luna · Sopra Observer · 100 m ·             │
+│    Cerca allineamenti Luna      Orario in uso: 21/10/2026 19:42          │
 ├───────────────────────────┬──────────────────────────────────────────────┤
 │ BOX LATERALE (≈380 px)    │                                              │
 │  • POV camera             │            SCENA 3D                          │
-│  • Fase lunare            │   (trascina, zoom, clic per posizionare)     │
-│  • Osservatore (quota,    │   marker ciano = Osservatore                 │
-│    altezza, spostamenti)  │   marker arancione = Target                  │
-│  • Dati (misure + Luna)   │   linea verde = linea di vista               │
-│  • Allineamenti Luna      │   disco = Luna (posa e dimensione reali)     │
+│  • Osservatore (quota,    │   (trascina, zoom, clic per posizionare)     │
+│    altezza, spostamenti)  │   marker ciano = Osservatore                 │
+│  • Dati (misure + Luna)   │   marker arancione = Target                  │
+│  • Cerca allineamenti     │   linea verde = linea di vista               │
+│    (finestra di ricerca)  │   disco = Luna (posa e dimensione reali)     │
 ├───────────────────────────┴──────────────────────────────────────────────┤
 │ CARD TEMPO  Data/ora (fuso: …) · −1 min · +1 min · slider ±720 min · Adesso│
 │ Tempo effettivo (UTC): 2026-10-21 19:40:00 UTC · ora locale UTC+02:00     │
+│        Fase lunare (centrata in fondo): disco + 62% C (crescente)        │
 └──────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -110,7 +112,7 @@ Esempio: vuoi fotografare la Luna appena sopra la torre del tuo paese.
 <https://verbavolant.github.io/lunar-photo-planner/>. La prima volta scarica parecchi dati: se vedi un globo grigio mentre carica, è normale. Si può lavorare anche prima che finisca.
 
 **Passo 2 — Vai sul posto.**
-Premi **`Vai a Home`** per un volo di prova su Piazza della Loggia a Brescia (45.5397°N 10.2197°E, camera a ≈500 m dal suolo). **Non c'è una barra di ricerca indirizzi**: per raggiungere il tuo soggetto naviga a mano con zoom e pan, partendo da una vista ampia della zona e avvicinandoti progressivamente. Le coordinate del punto sotto la camera le leggi in tempo reale nella card **POV camera**: quando i valori corrispondono a quelli che hai ricavato da una mappa, sei arrivato.
+Premi **`Vai a Home`** per un volo di prova su Piazza della Loggia a Brescia (45.5397°N 10.2197°E, camera a ≈500 m dal suolo; se hai già salvato una Home con `Imposta come Home`, il volo parte dal punto salvato e riporta l'Osservatore lì). **Non c'è una barra di ricerca indirizzi**: per raggiungere il tuo soggetto naviga a mano con zoom e pan, partendo da una vista ampia della zona e avvicinandoti progressivamente. Le coordinate del punto sotto la camera le leggi in tempo reale nella card **POV camera**: quando i valori corrispondono a quelli che hai ricavato da una mappa, sei arrivato.
 
 **Passo 3 — Posiziona l'Osservatore** (il punto da cui scatti).
 Clicca il pulsante **`Osservatore: — clicca sulla scena`** (diventa evidenziato = punto attivo), poi **un clic secco** sul marciapiede/prato dove ti metterai. Compare un **marker ciano** e il pulsante mostra le coordinate lette, ad es. `Osservatore: 45.539210°N 10.219100°E · 152 m`.
@@ -119,13 +121,13 @@ Clicca il pulsante **`Osservatore: — clicca sulla scena`** (diventa evidenziat
 Clicca **`Target: — clicca sulla scena`**, poi clic secco **sulla cima** del soggetto (non alla base: il valore utile è l'angolo verticale verso la cima). Compare il **marker arancione** e una **linea verde** tra i due punti. Nel box a sinistra appaiono le misure.
 
 **Passo 5 — Mettiti nel punto di ripresa giusto.**
-Nella card **Osservatore** usa `▲ avanti`, `▼ indietro`, `◀ sinistra`, `▶ destra` (passo 1 / 10 / 100 m) per micro-posizionarti: le direzioni sono **relative alla vista corrente**, e la camera segue il punto. Poi imposta l'**Altezza dal suolo** (`−` / campo numerico / `+`, passo 1 / 10 / 100 m) = altezza della tua testa o del treppiede dal punto in cui hai cliccato (1,7 m a mano libera, 1,5 m col treppiede, ecc.).
+Nella card **Osservatore** usa `▲ avanti`, `▼ indietro`, `◀ sinistra`, `▶ destra` (passo 1 / 10 / 100 m) per micro-posizionarti: le direzioni sono **relative alla vista corrente**, e la camera segue il punto. Poi imposta l'**Altezza dal suolo** (`−` / campo numerico / `+`, passo 1 / 10 / 100 m) = altezza della tua testa o del treppiede dal punto in cui hai cliccato (1,7 m a mano libera, 1,5 m col treppiede, ecc.). Se questo è il tuo punto di ripresa abituale, premi **`Imposta come Home`** nella barra in alto: la posizione è salvata nel browser e al prossimo avvio l'app riparte da lì.
 
 **Passo 6 — Dai l'ora.**
 Nella **card Tempo** in basso: imposta `Data/ora` (è l'ora locale del tuo fuso), rifinisci con `−1 min` / `+1 min`, oppure sposta lo **slider** (−720…+720 min, passi di 5 min) per "vedere scorrere" il cielo. `Adesso` riporta tutto all'ora corrente. Controlla nella card **Dati** le righe `Luna · Azimut`, `Luna · Altitudine` (se è negativa la Luna è sotto l'orizzonte), `Luna · Diametro`, e la card **Fase lunare**.
 
 **Passo 7 — Guarda l'inquadratura e cerca l'istante.**
-Premi **`Vista Luna`**: la camera si mette 1 m sopra l'Osservatore, rivolta verso la Luna con la sua altitudine reale. Premi **`Sopra Observer · 100 m`** per la vista in pianta (nord in alto), così verifichi la geometria. Premi infine **`Allineamenti Luna`** per farti dire **quando** la Luna passa esattamente sulla linea Osservatore→Target: [§8](#8-trovare-listante-giusto-allineamenti-luna).
+Premi **`Vista Luna`**: la camera si mette 1 m sopra l'Osservatore, rivolta verso la Luna con la sua altitudine reale. Premi **`Sopra Observer · 100 m`** per la vista in pianta (nord in alto), così verifichi la geometria. Premi infine **`Cerca allineamenti Luna`** per farti dire **quando** la Luna passa esattamente sulla linea Osservatore→Target: [§8](#8-trovare-listante-giusto-cerca-allineamenti-luna).
 
 ---
 
@@ -138,11 +140,14 @@ Premi **`Vista Luna`**: la camera si mette 1 m sopra l'Osservatore, rivolta vers
 | `Osservatore: — clicca sulla scena` | seleziona l'Osservatore come **punto attivo**; il clic successivo sulla scena lo posiziona | quando è attivo è evidenziato in azzurro; dopo il posizionamento mostra latitudine, longitudine e quota lette, es. `Osservatore: 45.539210°N 10.219100°E · 152 m` |
 | `Target: — clicca sulla scena` | idem per il **Target** (il soggetto) | marker arancione |
 | `Azzera` | rimuove **il punto attivo** (quello selezionato nel pulsante precedente) | azzerando l'Osservatore si azzera anche il riferimento dell'altezza dal suolo |
-| `Vai a Home` | volo nadirale (camera verticale, nord in alto) su Piazza della Loggia, Brescia, a ≈500 m dal suolo | utile per "rientrare" dopo una navigazione persa |
+| `Vai a Home` | con **Home salvata**: volo nadirale sul punto salvato **e riporta l'Osservatore su quel punto** (con il suolo di riferimento del salvataggio); **senza Home**: volo nadirale su Piazza della Loggia, Brescia, a ≈500 m dal suolo, senza toccare l'Osservatore | utile per "rientrare" dopo una navigazione persa o dopo aver spostato l'Osservatore |
+| `Imposta come Home` | salva la posizione corrente dell'Osservatore (coordinate, quota e suolo di riferimento) come **Home** nel `localStorage` del browser: al prossimo avvio l'app riparte da lì e `Vai a Home` ci riporta | disabilitato finché l'Osservatore non è posizionato; una sola Home per browser: risalvando la sovrascrivi |
 | `Vista Luna` | camera **1 m sopra l'Osservatore**, orientata con azimut = azimut della Luna e inclinazione = altitudine della Luna (volo animato di 2 s) | richiede l'Osservatore. È la posa del fotografo: da qui vedi la Luna dove la vedrai davvero |
 | `Sopra Observer · 100 m` | vista dall'alto 100 m sopra l'Osservatore, puntato su di lui, nord in alto | disabilitato finché l'Osservatore non è posizionato |
-| `Allineamenti Luna` | apre la finestra di ricerca degli allineamenti | disabilitato se mancano Osservatore o Target |
+| `Cerca allineamenti Luna` | apre la finestra di ricerca degli allineamenti | disabilitato se mancano Osservatore o Target |
 | `Manuale` | apre questo manuale in una **finestra separata**, formattato in HTML | il contenuto è `MANUALE.md` alla root del repository; i collegamenti ai file del repo (es. `README.md`) portano a GitHub |
+
+A destra della barra, oltre ai pulsanti: **`Orario in uso: …`** — l'orario effettivo della scena (Data/ora + slider), aggiornato in tempo reale da slider, `−1 min`/`+1 min` e adozioni dei risultati: è lo stesso valore della riga di stato della card Tempo, sempre visibile.
 
 > **Il punto attivo comanda il clic sulla scena.** Se dopo aver posizionato il Target lasci `Target` selezionato e clicchi sulla scena, sposti il **Target**, non l'Osservatore. Controlla quale dei due pulsanti è evidenziato.
 
@@ -159,9 +164,9 @@ La vista corrente della camera in numeri, aggiornata circa 10 volte al secondo m
 
 Dopo `Vista Luna` la camera sta sull'Osservatore (1 m sopra): la card mostra quindi il **punto di vista del fotografo**, con l'azimut e l'inclinazione reali della Luna.
 
-### 6.3 Card "Fase lunare"
+### 6.3 Blocco "Fase lunare" (barra in basso, centrato)
 
-Disco lunare disegnato con la **frazione illuminata reale** all'orario in uso, più l'etichetta testuale: `62% C (crescente)` oppure `38% D (decrescente)` — `C`/`D` = crescente/decrescente. La card segue automaticamente l'orario della card Tempo e gli istanti adottati dalla ricerca allineamenti.
+Titolo, **disco lunare** disegnato con la **frazione illuminata reale** all'orario in uso, più l'etichetta testuale: `62% C (crescente)` oppure `38% D (decrescente)` — `C`/`D` = crescente/decrescente. Il blocco è centrato in fondo alla fascia in basso (card Tempo) e segue automaticamente l'orario in uso: slider, ±1 min e istanti adottati dalla ricerca allineamenti.
 
 > Il disco è una rappresentazione **equivalente** (orientamento del limbo convenzionale, emisfero boreale): i **numeri** (frazione illuminata, azimut, altitudine, diametro) vengono dai calcoli reali.
 
@@ -214,9 +219,9 @@ Serve a verificare l'allineamento **all'orario corrente** senza aprire la ricerc
 
 I numeri sono formattati all'italiana (virgola decimale, punto per le migliaia). Se una riga mostra `—` il valore non è calcolabile in quel momento: vedi [§11](#11-messaggi-a-schermo-e-problemi-frequenti).
 
-### 6.6 Card "Allineamenti Luna" (finestra di ricerca)
+### 6.6 Finestra di ricerca "Cerca allineamenti Luna"
 
-Si apre con `Allineamenti Luna` (Osservatore e Target entrambi posizionati). Intestazione: **`Luna sulla linea Observer→Target`**, con `Ricalcola` e `×` (chiudi).
+Si apre con `Cerca allineamenti Luna` (Osservatore e Target entrambi posizionati). Intestazione: **`Luna sulla linea Observer→Target`**, con `Ricalcola` e `×` (chiudi).
 
 | Parametro | Intervallo | Default | Effetto |
 |---|---|---|---|
@@ -243,7 +248,7 @@ fase 96% C (crescente)
 | `in azimut` / `in quota` | scarto praticamente nullo su quell'asse (< 0,005°): la Luna è centrata |
 | `fase 96% C (crescente)` | fase lunare in quell'istante |
 
-**Cliccare una riga adotta quell'istante:** `Data/ora` viene impostato, lo slider torna a 0 e tutto il resto (Luna in scena, card Fase lunare, righe **Luna ·**) si ricalcola su quell'ora. **La finestra resta aperta** con l'elenco: puoi adottare un altro istante senza ripetere la ricerca; `Ricalcola` riparte dal campo `Ricerca da`, non dall'orario adottato.
+**Cliccare una riga adotta quell'istante** e la mette **in grassetto** finché non ne adotti un'altra o premi `Ricalcola`: `Data/ora` viene impostato, lo slider torna a 0 e tutto il resto (Luna in scena, blocco Fase lunare, righe **Luna ·**) si ricalcola su quell'ora. **La finestra resta aperta** con l'elenco: puoi adottare un altro istante senza ripetere la ricerca; `Ricalcola` riparte dal campo `Ricerca da`, non dall'orario adottato.
 
 ### 6.7 Card "Tempo" (fascia in basso, tutta larghezza)
 
@@ -254,6 +259,8 @@ fase 96% C (crescente)
 | slider `−720 … +720` (passi 5) | scostamento in minuti dall'orario impostato, etichettato `+N min` / `-N min` |
 | `Adesso` | riporta l'orario all'istante corrente e lo slider a 0 |
 | riga di stato | `Tempo effettivo (UTC): 2026-10-21 17:40:00 UTC · ora locale UTC+02:00 (con ora legale/solare del fuso Europe/Rome)` |
+
+In fondo alla fascia, **centrato**: il blocco **Fase lunare** ([§6.3](#63-blocco-fase-lunare-barra-in-basso-centrato)) — titolo, disco e percentuale all'orario in uso.
 
 L'orario usato per **tutto** (Luna, fase, misure lunari) è `Data/ora + scostamento dello slider`, cioè il **Tempo effettivo** mostrato nella riga di stato. Lo stesso valore viene scritto nell'orologio interno della scena 3D (la cui animazione resta ferma).
 
@@ -312,7 +319,7 @@ Conseguenza pratica: a 600 mm su full frame un FOV di 3,44° significa che **0,1
 
 ---
 
-## 8. Trovare l'istante giusto: Allineamenti Luna
+## 8. Trovare l'istante giusto: Cerca allineamenti Luna
 
 La ricerca campiona il tempo e cerca gli istanti in cui il **centro del disco lunare** passa vicino alla **linea di vista Osservatore → Target**.
 
@@ -320,7 +327,7 @@ La ricerca campiona il tempo e cerca gli istanti in cui il **centro del disco lu
 
 1. Posiziona **Osservatore** e **Target** (il Target va sul punto del soggetto che vuoi "toccare" con la Luna: cima, guglia, arco…).
 2. Imposta un **Tempo effettivo** di partenza sensato (card Tempo): il campo `Ricerca da` della finestra parte **da lì**, non da mezzanotte. Se cerchi uno scatto al crepuscolo dei prossimi due mesi, mettiti già su una fascia serale; per cercare nel passato modifica direttamente `Ricerca da`.
-3. Premi **`Allineamenti Luna`**.
+3. Premi **`Cerca allineamenti Luna`**.
 
 ### 8.2 Scegliere i parametri
 
@@ -348,7 +355,7 @@ La ricerca campiona il tempo e cerca gli istanti in cui il **centro del disco lu
 | `N passaggi scartati (Luna sotto l'orizzonte)` | passaggi trovati ma esclusi perché la Luna era sotto l'orizzonte (non fotografabili); il conteggio include i passaggi che altrimenti apparirebbero in lista |
 | `Linea di vista indefinita: Observer e Target coincidono.` | i due punti sono sovrapposti: riposiziona l'Osservatore o il Target |
 
-**Clicca la riga** per adottare l'istante: `Data/ora` si aggiorna, lo slider va a 0, la finestra resta aperta con l'elenco (puoi adottarne un altro subito); card **Fase lunare** e righe **Luna ·** si ricalcolano su quell'istante.
+**Clicca la riga** per adottare l'istante: `Data/ora` si aggiorna, lo slider va a 0, la finestra resta aperta con l'elenco (puoi adottarne un altro subito); la riga adottata appare **in grassetto** finché non ne adotti un'altra o premi `Ricalcola`; blocco **Fase lunare** e righe **Luna ·** si ricalcolano su quell'istante.
 
 ### 8.4 Verifica finale in 3D (passaggio consigliato)
 
@@ -438,7 +445,7 @@ Senza chiave o token l'app resta utilizzabile: si naviga sul globo e si posizion
 | La Luna non si vede in scena | `Luna · Altitudine` negativa (sotto l'orizzonte), oppure stai guardando da un'altra parte / in nadir | cambia orario, poi premi `Vista Luna` |
 | Edifici lontani sgranati o assenti | dettaglio limitato oltre ~1 km (default) | `?tileMaxM=2000` (più dati) |
 | Scena pesante, scatti, caricamento lungo | GPU o connessione limitate, troppe schede che usano WebGL | chiudi altre schede, usa `?tileMaxM=500`, non restare zoomato molto in alto |
-| Dopo un reload i punti sono spariti | nessuna persistenza: lo stato vive solo nella pagina | segna le coordinate prima di ricaricare |
+| Dopo un reload i punti sono spariti | nessuna persistenza per Target e orario: lo stato vive solo nella pagina (l'Osservatore torna solo se hai salvato una Home con `Imposta come Home`, §6.1) | segna le coordinate prima di ricaricare |
 | Dopo un reload la mesh riparte dal principio | normale: la sessione dei tile è nuova | — |
 
 **Debug.** Apri la console del browser (F12) e filtra `lunar-photo-planner`: trovi le creazioni del tileset, ad es. `[lunar-photo-planner] tileset "google": creazione #1 in questa sessione` e, nei remount, `riuso dell'istanza di sessione (creazioni finora: 1)`. È il modo corretto per verificare che l'app non stia martellando il provider di tile.
@@ -460,7 +467,7 @@ Sono i limiti **noti e voluti** dell'attuale release, non bug da segnalare:
 | Suolo sotto l'Osservatore | `Altezza dal suolo` è riferita alla quota letta **al momento del clic** e non viene rimisurata quando ti sposti (i tile 3D non espongono un terreno campionabile): dopo grandi spostamenti, riposiziona l'Osservatore. |
 | Fase lunare | La frazione illuminata è **geocentrica** (definizione standard delle fasi); lo scarto topocentrico è sotto l'1%. Il **disco** disegnato è una rappresentazione equivalente (nessuna librazione, nessun dettaglio dei mari): contano i numeri. |
 | Fotocamera | Nessuna simulazione di sensore, focale, frustum o "Luna nel frame": [calcolo a mano, §7.3](#73-dal-numero-alla-focale). |
-| Funzionalità non ancora presenti | Ricerca inversa (trova luogo + data + ora), ricerca per indirizzo, confronto di più candidati, salvataggio/condivisione della pianificazione, stime di esposizione. |
+| Funzionalità non ancora presenti | Ricerca inversa (trova luogo + data + ora), ricerca per indirizzo, confronto di più candidati, salvataggio/condivisione della pianificazione (unica eccezione: la Home dell'Osservatore, §6.1), stime di esposizione. |
 | Tempo | Precisione **al minuto** sull'input e sulle etichette; la ricerca allineamenti campiona con il `Passo (min)` scelto e raffina gli attraversamenti, ma il risultato mostrato resta in ore:minuti. |
 | Fuso orario | Sempre quello del **browser**. Per pianificare all'estero, considera lo scostamento a mano. |
 | Dati 3D | La mesh fotorealistica arriva da Google (via Cesium ion o via Map Tiles API, a seconda della configurazione: [§9](#9-parametri-nellurl-provider-tilemaxm)) ed è disponibile solo per le aree coperte dal servizio; disponibilità e risoluzione dipendono dal provider, non dall'app. |
@@ -471,7 +478,7 @@ Sono i limiti **noti e voluti** dell'attuale release, non bug da segnalare:
 
 - **Attribution obbligatoria:** i crediti mostrati in basso a destra (Cesium ion e Google) sono un requisito dei termini dei provider e restano sempre visibili.
 - **Piano Cesium ion:** il sito usa un account ion; il piano *Community* gratuito è per uso **individuale non commerciale** e ha una quota mensile di streaming. Se vedi blocchi ricorrenti, può essere stata esaurita quella quota.
-- **Nessun backend, nessun account:** l'app è un sito statico. **Non** salva nulla nel browser (né cookie propri, né storage, né geolocalizzazione) e **non** invia i tuoi punti da nessuna parte: chiudendo o ricaricando la pagina, la pianificazione va persa.
+- **Nessun backend, nessun account:** l'app è un sito statico e **non** invia i tuoi punti da nessuna parte: chiudendo o ricaricando la pagina, la pianificazione va persa. Unica cosa scritta nel browser: la **Home dell'Osservatore**, solo se premi `Imposta come Home` (localStorage; resta finché non la sovrascrivi o cancelli i dati del sito). Nessun cookie, nessuna geolocalizzazione.
 - **Cosa esce dal tuo dispositivo:** richieste verso Cesium ion/`api.cesium.com` e verso i server dei tile 3D per scaricare la scena, come per qualsiasi mappa 3D.
 - **Per chi ospita l'app:** le chiavi vanno protette con restrizioni HTTP referrer lato Google Cloud e i segreti (chiave Google, token ion) vanno solo nei secret di build, mai nel codice e mai nei log. La chiave browser finisce nel bundle JavaScript: è normale, la difesa è la restrizione del referrer.
 

@@ -21,6 +21,7 @@ import {
   type AlignmentSearchResult,
 } from './planning/alignment'
 import { formatAngleDeg, formatDistanceM } from './planning/format'
+import { loadSavedHome, saveHome, type SavedHome } from './planning/homeStorage'
 import {
   browserTimeZone,
   dateToLocalInputValue,
@@ -55,6 +56,15 @@ const TOOLBAR_STYLE = {
   gap: 8,
   padding: '8px 12px',
   flexShrink: 0,
+}
+
+// Readout «Orario in uso» in fondo a destra nella barra comandi (T-050):
+// segue slider, ±1 min e adozioni, così l'orario effettivo è visibile senza
+// guardare la card Tempo.
+const TIME_READOUT_STYLE = {
+  marginLeft: 'auto',
+  whiteSpace: 'nowrap' as const,
+  color: '#9aa3b5',
 }
 
 const MAIN_ROW_STYLE = {
@@ -163,6 +173,12 @@ const ALIGNMENT_ROW_BUTTON_STYLE = {
   whiteSpace: 'nowrap' as const,
 }
 
+// Riga risultato adottata (T-053): stessa riga con il testo in grassetto.
+const ALIGNMENT_ROW_ADOPTED_STYLE = {
+  ...ALIGNMENT_ROW_BUTTON_STYLE,
+  fontWeight: 700 as const,
+}
+
 const WINDOW_PARAMS_STYLE = {
   display: 'flex',
   gap: 10,
@@ -201,6 +217,15 @@ function formatPoint(point: GeoPoint): string {
   const latitudeHemisphere = point.latitudeDeg < 0 ? 'S' : 'N'
   const longitudeHemisphere = point.longitudeDeg < 0 ? 'O' : 'E'
   return `${latitudeAbs}°${latitudeHemisphere} ${longitudeAbs}°${longitudeHemisphere} · ${point.heightM.toFixed(0)} m`
+}
+
+/** GeoPoint dalla Home salvata (lat/lon e quota ellissoide del salvataggio). */
+function savedHomePoint(home: SavedHome): GeoPoint {
+  return {
+    latitudeDeg: home.latitudeDeg,
+    longitudeDeg: home.longitudeDeg,
+    heightM: home.heightM,
+  }
 }
 
 /** Offset rispetto alla linea di vista in italiano, con segno esplicito. */
@@ -252,7 +277,14 @@ function openManualeWindow(): void {
 }
 
 export default function App() {
-  const [observer, setObserver] = useState<GeoPoint | null>(null)
+  // Home dell'Osservatore salvata nel browser (T-051): letta una sola volta
+  // all'avvio; se valida ripristina subito l'Osservatore sul punto salvato.
+  const [savedHome, setSavedHome] = useState<SavedHome | null>(() =>
+    loadSavedHome(window.localStorage),
+  )
+  const [observer, setObserver] = useState<GeoPoint | null>(() =>
+    savedHome === null ? null : savedHomePoint(savedHome),
+  )
   const [target, setTarget] = useState<GeoPoint | null>(null)
   const [activePoint, setActivePoint] = useState<PlannerPointId>('observer')
   const viewerRef = useRef<Viewer | null>(null)
@@ -261,7 +293,9 @@ export default function App() {
   const [viewer, setViewer] = useState<Viewer | null>(null)
   // Quota del suolo misurata al pick dell'Observer: riferimento per l'altezza
   // dal suolo (ADR-012: non ricampionata a valle del pick).
-  const [observerGroundM, setObserverGroundM] = useState<number | null>(null)
+  const [observerGroundM, setObserverGroundM] = useState<number | null>(
+    () => savedHome?.groundHeightM ?? null,
+  )
   // Passo (m) dei bottoni ± dell'altezza dal suolo.
   const [observerHeightStepM, setObserverHeightStepM] = useState(1)
   // Passo (m) dei comandi di spostamento orizzontale dell'Observer (T-037).
@@ -283,9 +317,12 @@ export default function App() {
   const [alignmentToleranceDeg, setAlignmentToleranceDeg] = useState<number>(
     DEFAULT_ALIGNMENT_SEARCH.toleranceDeg,
   )
+  // Ultimo candidato adottato (T-053): la riga corrispondente nell'elenco
+  // appare in grassetto; a ogni nuova ricerca riparte da zero.
+  const [adoptedAlignmentMs, setAdoptedAlignmentMs] = useState<number | null>(null)
   const effectiveDate = new Date(effectiveTimeMs(baseDateMs, sliderOffsetMin))
-  // Fase lunare all'orario in uso (geocentrica, standard): card nel box
-  // laterale e % C/D nelle righe dei risultati allineamenti.
+  // Fase lunare all'orario in uso (geocentrica, standard): blocco centrato
+  // nella barra Tempo e % C/D nelle righe dei risultati allineamenti.
   const phaseNow = moonPhase(effectiveDate)
 
   const points: Record<PlannerPointId, GeoPoint | null> = { observer, target }
@@ -404,9 +441,51 @@ export default function App() {
     updateObserverPoint(movePointOnWGS84(observer, azimuthDeg, observerMoveStepM))
   }
 
+  /**
+   * Salva la posizione corrente dell'Osservatore come Home nel browser (T-051).
+   * Il suolo di riferimento del pick (ADR-012) è salvato insieme al punto, così
+   * al ripristino l'altezza dal suolo resta coerente senza ricampionare.
+   */
+  function saveObserverAsHome(): void {
+    if (observer === null) {
+      return
+    }
+    const home: SavedHome = {
+      latitudeDeg: observer.latitudeDeg,
+      longitudeDeg: observer.longitudeDeg,
+      heightM: observer.heightM,
+      groundHeightM: observerGroundM,
+    }
+    try {
+      saveHome(home, window.localStorage)
+    } catch {
+      // Storage non scrivibile (es. navigazione privata): la sessione continua,
+      // la Home semplicemente non sopravvive al ricaricamento.
+      console.error('Home: salvataggio nel browser non riuscito (localStorage non disponibile).')
+      return
+    }
+    setSavedHome(home)
+  }
+
+  /**
+   * «Vai a Home» (T-051): con una Home salvata riporta l'Osservatore sul punto
+   * salvato (con il suolo di riferimento del salvataggio) e ci vola sopra;
+   * senza Home resta il volo di default su Brescia (HOME_VIEW), che non tocca
+   * l'Osservatore.
+   */
   function flyToHomeView(): void {
     const viewer = viewerRef.current
     if (viewer === null || viewer.isDestroyed()) {
+      return
+    }
+    if (savedHome !== null) {
+      setObserver(savedHomePoint(savedHome))
+      setObserverGroundM(savedHome.groundHeightM)
+      flyToOverhead(viewer, {
+        longitudeDeg: savedHome.longitudeDeg,
+        latitudeDeg: savedHome.latitudeDeg,
+        altitudeM: (savedHome.groundHeightM ?? 0) + 500,
+      })
       return
     }
     flyToOverhead(viewer, HOME_VIEW)
@@ -448,6 +527,8 @@ export default function App() {
       return
     }
     setAlignmentNote(null)
+    // Nuova ricerca → elenco nuovo: nessuna riga resta evidenziata (T-053).
+    setAdoptedAlignmentMs(null)
     setAlignmentSearch(
       searchMoonAlignments({
         observer,
@@ -467,6 +548,8 @@ export default function App() {
   function adoptAlignment(dateMs: number): void {
     setBaseDateMs(dateMs)
     setSliderOffsetMin(0)
+    // La riga adottata resta in grassetto nell'elenco (T-053).
+    setAdoptedAlignmentMs(dateMs)
     // La finestra resta aperta con l'elenco (T-046b, richiesta umana):
     // l'umano può adottare altri candidati senza premere Ricalcola.
   }
@@ -512,9 +595,21 @@ export default function App() {
         <button
           onClick={flyToHomeView}
           style={BUTTON_STYLE}
-          title="Vai a Home: Piazza della Loggia, centro di Brescia (45,5397°N 10,2197°E), ≈ 500 m sul suolo"
+          title={
+            savedHome === null
+              ? 'Vai a Home: Piazza della Loggia, centro di Brescia (45,5397°N 10,2197°E), ≈ 500 m sul suolo'
+              : `Vai a Home (${formatPoint(savedHomePoint(savedHome))}): riporta l'Osservatore sulla posizione salvata nel browser`
+          }
         >
           Vai a Home
+        </button>
+        <button
+          onClick={saveObserverAsHome}
+          style={BUTTON_STYLE}
+          disabled={observer === null}
+          title="Salva la posizione attuale dell'Osservatore come Home nel browser (localStorage): al prossimo avvio l'app riparte da lì e «Vai a Home» ci riporta"
+        >
+          Imposta come Home
         </button>
         <button
           onClick={flyToMoonView}
@@ -537,7 +632,7 @@ export default function App() {
           disabled={observer === null || target === null}
           title="Cerca gli istanti in cui la Luna passa sulla linea Observer→Target, dal campo «Ricerca da» in avanti"
         >
-          Allineamenti Luna
+          Cerca allineamenti Luna
         </button>
         <button
           onClick={openManualeWindow}
@@ -546,11 +641,16 @@ export default function App() {
         >
           Manuale
         </button>
+        <div
+          style={TIME_READOUT_STYLE}
+          title="Orario effettivo della scena (Data/ora + slider): aggiorna con slider, ±1 min e adozioni"
+        >
+          Orario in uso: <strong>{formatLocalDateTime(effectiveDate)}</strong>
+        </div>
       </div>
       <div style={MAIN_ROW_STYLE}>
         <div style={SIDEBAR_STYLE}>
           <CameraPovCard viewer={viewer} />
-          <MoonPhaseCard phase={phaseNow} />
           {observer !== null && (
             <div style={CARD_STYLE}>
               <div style={ROW_STYLE}>
@@ -796,7 +896,11 @@ export default function App() {
                 <button
                   key={candidate.dateMs}
                   onClick={() => adoptAlignment(candidate.dateMs)}
-                  style={ALIGNMENT_ROW_BUTTON_STYLE}
+                  style={
+                    candidate.dateMs === adoptedAlignmentMs
+                      ? ALIGNMENT_ROW_ADOPTED_STYLE
+                      : ALIGNMENT_ROW_BUTTON_STYLE
+                  }
                   title="Adotta questo istante come data/ora della vista"
                 >
                   <div style={ROW_STYLE}>
@@ -886,6 +990,7 @@ export default function App() {
           · ora locale {localUtcOffsetLabel(effectiveDate)} (con ora legale/solare del fuso{' '}
           {browserTimeZone()})
         </div>
+        <MoonPhaseCard phase={phaseNow} />
       </div>
     </div>
   )

@@ -2,28 +2,18 @@ import type { MoonPhase } from '../astronomy/moonPhase'
 import { moonPhaseDirection } from '../astronomy/moonPhase'
 import { formatPercent } from '../planning/format'
 
-// Stessa veste delle card del box laterale (stili in App.tsx): duplicato
-// locale per non esportare stili tra componenti (convenzione del progetto).
-const PHASE_CARD_STYLE = {
-  display: 'grid',
-  gap: 6,
-  padding: '8px 12px',
-  borderRadius: 6,
-  backgroundColor: 'rgba(20, 20, 30, 0.85)',
-  color: '#f5f5f5',
-  fontFamily: 'sans-serif',
-  fontSize: 13,
-  colorScheme: 'dark' as const,
+// Blocco dentro la barra Tempo (T-054): niente card propria — sfondo
+// trasparente che eredita la fascia, tutto su una riga centrata. Stili
+// duplicati in locale per non esportarli tra componenti (convenzione).
+const PHASE_BAR_STYLE = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center' as const,
+  gap: 10,
 }
 
 const PHASE_TITLE_STYLE = {
   fontWeight: 600 as const,
-}
-
-const PHASE_BODY_STYLE = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 10,
 }
 
 const PHASE_ROW_STYLE = {
@@ -64,34 +54,33 @@ export function moonPhaseLabel(phase: MoonPhase): string {
 }
 
 /**
- * Card "Fase lunare" (T-036): disco lunare con la frazione illuminata
- * all'orario in uso, calcolata da `moonPhase` (astronomy-engine, dati reali).
- * La frazione è geocentrica per definizione standard (vedi ADR-013); la
- * rappresentazione grafica del limbo è convenzionale, non dipende
- * dall'orientamento reale del cielo dell'Observer.
+ * Blocco "Fase lunare" (T-036; nella barra Tempo centrato da T-054): disco
+ * lunare con la frazione illuminata all'orario in uso, calcolata da
+ * `moonPhase` (astronomy-engine, dati reali). La frazione è geocentrica per
+ * definizione standard (vedi ADR-013); la rappresentazione grafica del limbo
+ * è convenzionale, non dipende dall'orientamento reale del cielo
+ * dell'Observer.
  */
 export default function MoonPhaseCard({ phase }: { phase: MoonPhase }) {
   return (
-    <div style={PHASE_CARD_STYLE}>
+    <div style={PHASE_BAR_STYLE}>
       <div style={PHASE_TITLE_STYLE}>Fase lunare</div>
-      <div style={PHASE_BODY_STYLE}>
-        <svg
-          width={64}
-          height={64}
-          viewBox="-32 -32 64 64"
-          role="img"
-          aria-label="Disco lunare con la fase all'orario in uso"
-        >
-          <circle r={DISC_RADIUS} fill="#394050" stroke="#5a6172" strokeWidth={1} />
-          <path
-            d={moonPhaseLitPath(phase.illuminationFraction, DISC_RADIUS)}
-            fill="#e8e8e8"
-            transform={phase.waxing ? undefined : 'scale(-1 1)'}
-          />
-        </svg>
-        <div style={PHASE_ROW_STYLE}>
-          <strong>{moonPhaseLabel(phase)}</strong>
-        </div>
+      <svg
+        width={64}
+        height={64}
+        viewBox="-32 -32 64 64"
+        role="img"
+        aria-label="Disco lunare con la fase all'orario in uso"
+      >
+        <circle r={DISC_RADIUS} fill="#394050" stroke="#5a6172" strokeWidth={1} />
+        <path
+          d={moonPhaseLitPath(phase.illuminationFraction, DISC_RADIUS)}
+          fill="#e8e8e8"
+          transform={phase.waxing ? undefined : 'scale(-1 1)'}
+        />
+      </svg>
+      <div style={PHASE_ROW_STYLE}>
+        <strong>{moonPhaseLabel(phase)}</strong>
       </div>
     </div>
   )
