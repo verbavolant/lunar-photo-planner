@@ -270,6 +270,10 @@ export default function App() {
   const [sliderOffsetMin, setSliderOffsetMin] = useState(0)
   const [alignmentWindowOpen, setAlignmentWindowOpen] = useState(false)
   const [alignmentSearch, setAlignmentSearch] = useState<AlignmentSearchResult | null>(null)
+  // Istante di partenza dell'ultima ricerca (T-046b): dopo l'adozione di un
+  // candidato l'orario effettivo cambia, ma l'elenco mostrato resta quello
+  // della ricerca; l'etichetta «Ricerca da» segue l'elenco, non l'orario.
+  const [alignmentSearchFromMs, setAlignmentSearchFromMs] = useState<number | null>(null)
   const [alignmentNote, setAlignmentNote] = useState<string | null>(null)
   const [alignmentDays, setAlignmentDays] = useState(DEFAULT_ALIGNMENT_DAYS)
   const [alignmentStepMin, setAlignmentStepMin] = useState<number>(
@@ -431,10 +435,12 @@ export default function App() {
     } catch {
       setAlignmentNote('Linea di vista indefinita: Observer e Target coincidono.')
       setAlignmentSearch(null)
+      setAlignmentSearchFromMs(null)
       setAlignmentWindowOpen(true)
       return
     }
     setAlignmentNote(null)
+    setAlignmentSearchFromMs(effectiveDate.getTime())
     setAlignmentSearch(
       searchMoonAlignments({
         observer,
@@ -453,7 +459,8 @@ export default function App() {
   function adoptAlignment(dateMs: number): void {
     setBaseDateMs(dateMs)
     setSliderOffsetMin(0)
-    setAlignmentWindowOpen(false)
+    // La finestra resta aperta con l'elenco (T-046b, richiesta umana):
+    // l'umano può adottare altri candidati senza premere Ricalcola.
   }
 
   function flyToObserverOverhead(): void {
@@ -727,7 +734,7 @@ export default function App() {
                   <input
                     type="number"
                     min={0.05}
-                    max={5}
+                    max={10}
                     step={0.05}
                     value={alignmentToleranceDeg}
                     onChange={(event) =>
@@ -735,7 +742,7 @@ export default function App() {
                         clampFloat(
                           event.target.value,
                           0.05,
-                          5,
+                          10,
                           DEFAULT_ALIGNMENT_SEARCH.toleranceDeg,
                         ),
                       )
@@ -745,8 +752,9 @@ export default function App() {
                 </label>
               </div>
               <div style={ROW_STYLE}>
-                Ricerca da {formatLocalDateTime(effectiveDate)} · max{' '}
-                {DEFAULT_ALIGNMENT_SEARCH.maxResults} risultati
+                Ricerca da{' '}
+                {formatLocalDateTime(new Date(alignmentSearchFromMs ?? effectiveDate.getTime()))}{' '}
+                · max {DEFAULT_ALIGNMENT_SEARCH.maxResults} risultati
               </div>
               {alignmentNote !== null && <div style={ROW_STYLE}>{alignmentNote}</div>}
               {alignmentNote === null && alignmentSearch !== null &&

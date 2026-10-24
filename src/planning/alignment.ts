@@ -54,11 +54,14 @@ export const DEFAULT_ALIGNMENT_DAYS = 60
  */
 export const MAX_MOON_APPARENT_SPEED_DEG_PER_MIN = 0.3
 
-/** Parametri di ricerca predefiniti per l'anteprima di Fase 6. */
+/**
+ * Parametri di ricerca predefiniti della finestra Allineamenti. Tolleranza
+ * predefinita 5° con massimo 10° (richiesta umana 2026-10-21).
+ */
 export const DEFAULT_ALIGNMENT_SEARCH = {
   durationHours: DEFAULT_ALIGNMENT_DAYS * 24,
   stepMinutes: 15,
-  toleranceDeg: 1,
+  toleranceDeg: 5,
   maxResults: 8,
 } as const
 

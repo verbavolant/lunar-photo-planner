@@ -165,7 +165,7 @@ describe('searchMoonAlignments — attraversamenti reali della linea di vista', 
     expect(DEFAULT_ALIGNMENT_SEARCH).toEqual({
       durationHours: 1440,
       stepMinutes: 15,
-      toleranceDeg: 1,
+      toleranceDeg: 5,
       maxResults: 8,
     })
   })
