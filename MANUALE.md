@@ -65,7 +65,7 @@
 ┌──────────────────────────────────────────────────────────────────────────┐
 │ BARRETTA COMANDI  Osservatore · Target · Azzera · Vai a Home ·           │
 │    Imposta come Home · Vista Luna · Sopra Observer · 100 m ·             │
-│    Cerca allineamenti Luna      Orario in uso: 21/10/2026 19:42          │
+│    Cerca allineamenti Luna      Sviluppo: T-057                          │
 ├───────────────────────────┬──────────────────────────────────────────────┤
 │ BOX LATERALE (≈380 px)    │                                              │
 │  • POV camera             │            SCENA 3D                          │
@@ -75,9 +75,9 @@
 │  • Cerca allineamenti     │   linea verde = linea di vista               │
 │    (finestra di ricerca)  │   disco = Luna (posa e dimensione reali)     │
 ├───────────────────────────┴──────────────────────────────────────────────┤
-│ CARD TEMPO  Data/ora (fuso: …) · −1 min · +1 min · slider ±720 min · Adesso│
-│ Tempo effettivo (UTC): 2026-10-21 19:40:00 UTC · ora locale UTC+02:00     │
-│        Fase lunare (centrata in fondo): disco + 62% C (crescente)        │
+│ CARD TEMPO  Data/ora (fuso: …) · −1/+1 min · slider ±720 min · Adesso    │
+│ Orario in uso: 21/10/2026 19:42 · Tempo effettivo (UTC): 17:42:00 UTC    │
+│ Fase lunare (a destra dello slider): disco + 62% C (crescente)           │
 └──────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -124,7 +124,7 @@ Clicca **`Target: — clicca sulla scena`**, poi clic secco **sulla cima** del s
 Nella card **Osservatore** usa `▲ avanti`, `▼ indietro`, `◀ sinistra`, `▶ destra` (passo 1 / 10 / 100 m) per micro-posizionarti: le direzioni sono **relative alla vista corrente**, e la camera segue il punto. Poi imposta l'**Altezza dal suolo** (`−` / campo numerico / `+`, passo 1 / 10 / 100 m) = altezza della tua testa o del treppiede dal punto in cui hai cliccato (1,7 m a mano libera, 1,5 m col treppiede, ecc.). Se questo è il tuo punto di ripresa abituale, premi **`Imposta come Home`** nella barra in alto: la posizione è salvata nel browser e al prossimo avvio l'app riparte da lì.
 
 **Passo 6 — Dai l'ora.**
-Nella **card Tempo** in basso: imposta `Data/ora` (è l'ora locale del tuo fuso), rifinisci con `−1 min` / `+1 min`, oppure sposta lo **slider** (−720…+720 min, passi di 5 min) per "vedere scorrere" il cielo. `Adesso` riporta tutto all'ora corrente. Controlla nella card **Dati** le righe `Luna · Azimut`, `Luna · Altitudine` (se è negativa la Luna è sotto l'orizzonte), `Luna · Diametro`, e la card **Fase lunare**.
+Nella **card Tempo** in basso: imposta `Data/ora` (è l'ora locale del tuo fuso), rifinisci con `−1 min` / `+1 min`, oppure sposta lo **slider** (−720…+720 min, passi di 5 min) per "vedere scorrere" il cielo. `Adesso` riporta tutto all'ora corrente. Controlla nella card **Dati** le righe `Luna · Azimut`, `Luna · Altitudine` (se è negativa la Luna è sotto l'orizzonte), `Luna · Diametro`, e il blocco **Fase lunare** a destra dello slider; accanto allo slider leggi sempre **`Orario in uso: …`**, l'orario effettivo che usano tutti i calcoli.
 
 **Passo 7 — Guarda l'inquadratura e cerca l'istante.**
 Premi **`Vista Luna`**: la camera si mette 1 m sopra l'Osservatore, rivolta verso la Luna con la sua altitudine reale. Premi **`Sopra Observer · 100 m`** per la vista in pianta (nord in alto), così verifichi la geometria. Premi infine **`Cerca allineamenti Luna`** per farti dire **quando** la Luna passa esattamente sulla linea Osservatore→Target: [§8](#8-trovare-listante-giusto-cerca-allineamenti-luna).
@@ -147,7 +147,7 @@ Premi **`Vista Luna`**: la camera si mette 1 m sopra l'Osservatore, rivolta vers
 | `Cerca allineamenti Luna` | apre la finestra di ricerca degli allineamenti | disabilitato se mancano Osservatore o Target |
 | `Manuale` | apre questo manuale in una **finestra separata**, formattato in HTML | il contenuto è `MANUALE.md` alla root del repository; i collegamenti ai file del repo (es. `README.md`) portano a GitHub |
 
-A destra della barra, oltre ai pulsanti: **`Orario in uso: …`** — l'orario effettivo della scena (Data/ora + slider), aggiornato in tempo reale da slider, `−1 min`/`+1 min` e adozioni dei risultati: è lo stesso valore della riga di stato della card Tempo, sempre visibile.
+A destra della barra, oltre ai pulsanti: **`Sviluppo: T-057`** — l'ID dell'ultimo task completato nel piano di sviluppo del progetto; si aggiorna a ogni task chiuso. L'orario in uso non sta qui: è nella card Tempo, accanto allo slider ([§6.7](#67-card-tempo-fascia-in-basso-tutta-larghezza)).
 
 > **Il punto attivo comanda il clic sulla scena.** Se dopo aver posizionato il Target lasci `Target` selezionato e clicchi sulla scena, sposti il **Target**, non l'Osservatore. Controlla quale dei due pulsanti è evidenziato.
 
@@ -164,9 +164,9 @@ La vista corrente della camera in numeri, aggiornata circa 10 volte al secondo m
 
 Dopo `Vista Luna` la camera sta sull'Osservatore (1 m sopra): la card mostra quindi il **punto di vista del fotografo**, con l'azimut e l'inclinazione reali della Luna.
 
-### 6.3 Blocco "Fase lunare" (barra in basso, centrato)
+### 6.3 Blocco "Fase lunare" (barra in basso, a destra dello slider)
 
-Titolo, **disco lunare** disegnato con la **frazione illuminata reale** all'orario in uso, più l'etichetta testuale: `62% C (crescente)` oppure `38% D (decrescente)` — `C`/`D` = crescente/decrescente. Il blocco è centrato in fondo alla fascia in basso (card Tempo) e segue automaticamente l'orario in uso: slider, ±1 min e istanti adottati dalla ricerca allineamenti.
+Titolo, **disco lunare** disegnato con la **frazione illuminata reale** all'orario in uso, più l'etichetta testuale: `62% C (crescente)` oppure `38% D (decrescente)` — `C`/`D` = crescente/decrescente. Il blocco è alla **destra della riga dello slider** nella fascia in basso (card Tempo, stessa riga dei comandi data/ora) e segue automaticamente l'orario in uso: slider, ±1 min e istanti adottati dalla ricerca allineamenti.
 
 > Il disco è una rappresentazione **equivalente** (orientamento del limbo convenzionale, emisfero boreale): i **numeri** (frazione illuminata, azimut, altitudine, diametro) vengono dai calcoli reali.
 
@@ -260,7 +260,7 @@ fase 96% C (crescente)
 | `Adesso` | riporta l'orario all'istante corrente e lo slider a 0 |
 | riga di stato | `Tempo effettivo (UTC): 2026-10-21 17:40:00 UTC · ora locale UTC+02:00 (con ora legale/solare del fuso Europe/Rome)` |
 
-In fondo alla fascia, **centrato**: il blocco **Fase lunare** ([§6.3](#63-blocco-fase-lunare-barra-in-basso-centrato)) — titolo, disco e percentuale all'orario in uso.
+Accanto allo slider, a sinistra: **`Orario in uso: …`** — l'orario effettivo della scena, aggiornato in tempo reale da slider, `−1 min`/`+1 min` e adozioni dei risultati. Alla **destra dello slider**: il blocco **Fase lunare** ([§6.3](#63-blocco-fase-lunare-barra-in-basso-a-destra-dello-slider)) — titolo, disco e percentuale all'orario in uso.
 
 L'orario usato per **tutto** (Luna, fase, misure lunari) è `Data/ora + scostamento dello slider`, cioè il **Tempo effettivo** mostrato nella riga di stato. Lo stesso valore viene scritto nell'orologio interno della scena 3D (la cui animazione resta ferma).
 

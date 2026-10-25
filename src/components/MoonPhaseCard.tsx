@@ -2,13 +2,13 @@ import type { MoonPhase } from '../astronomy/moonPhase'
 import { moonPhaseDirection } from '../astronomy/moonPhase'
 import { formatPercent } from '../planning/format'
 
-// Blocco dentro la barra Tempo (T-054): niente card propria — sfondo
-// trasparente che eredita la fascia, tutto su una riga centrata. Stili
-// duplicati in locale per non esportarli tra componenti (convenzione).
+// Blocco dentro la barra Tempo (T-056): niente card propria — sfondo
+// trasparente che eredita la fascia; in App è ancorato alla destra della
+// riga dello slider data/ora. Stili duplicati in locale per non esportarli
+// tra componenti (convenzione).
 const PHASE_BAR_STYLE = {
   display: 'flex',
   alignItems: 'center',
-  justifyContent: 'center' as const,
   gap: 10,
 }
 
@@ -54,8 +54,9 @@ export function moonPhaseLabel(phase: MoonPhase): string {
 }
 
 /**
- * Blocco "Fase lunare" (T-036; nella barra Tempo centrato da T-054): disco
- * lunare con la frazione illuminata all'orario in uso, calcolata da
+ * Blocco "Fase lunare" (T-036; nella barra Tempo a destra della riga slider
+ * da T-056, prima centrato in fondo da T-054): disco lunare con la frazione
+ * illuminata all'orario in uso, calcolata da
  * `moonPhase` (astronomy-engine, dati reali). La frazione è geocentrica per
  * definizione standard (vedi ADR-013); la rappresentazione grafica del limbo
  * è convenzionale, non dipende dall'orientamento reale del cielo

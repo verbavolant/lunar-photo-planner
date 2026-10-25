@@ -58,10 +58,13 @@ const TOOLBAR_STYLE = {
   flexShrink: 0,
 }
 
-// Readout «Orario in uso» in fondo a destra nella barra comandi (T-050):
-// segue slider, ±1 min e adozioni, così l'orario effettivo è visibile senza
-// guardare la card Tempo.
-const TIME_READOUT_STYLE = {
+// Stato di sviluppo in fondo a destra nella barra comandi (T-057): riporta
+// l'ID dell'ultimo task completato nel piano (docs/ai/TASKS.md), così l'umano
+// vede sul live fino a dove è arrivato lo sviluppo. Aggiornare la costante a
+// ogni task chiuso.
+const DEVELOPMENT_STATUS = 'T-057'
+
+const DEV_STATUS_STYLE = {
   marginLeft: 'auto',
   whiteSpace: 'nowrap' as const,
   color: '#9aa3b5',
@@ -122,11 +125,24 @@ const CARD_STYLE = {
   colorScheme: 'dark' as const,
 }
 
-// Card Tempo: fascia a tutta larghezza sotto la vista (T-027).
+// Card Tempo: fascia a tutta larghezza sotto la vista (T-027). Da T-056 è una
+// riga orizzontale: a sinistra la colonna dei comandi data/ora, a destra il
+// blocco Fase lunare (centrato in verticale), non più una riga dedicata.
 const TEMPO_CARD_STYLE = {
   ...CARD_STYLE,
+  display: 'flex',
+  alignItems: 'center',
+  gap: 16,
   borderRadius: 0,
   flexShrink: 0,
+}
+
+// Colonna sinistra della card Tempo (T-056): le tre righe data/ora.
+const TEMPO_LEFT_STYLE = {
+  display: 'grid',
+  gap: 6,
+  flex: 1,
+  minWidth: 0,
 }
 
 const ROW_STYLE = {
@@ -321,8 +337,8 @@ export default function App() {
   // appare in grassetto; a ogni nuova ricerca riparte da zero.
   const [adoptedAlignmentMs, setAdoptedAlignmentMs] = useState<number | null>(null)
   const effectiveDate = new Date(effectiveTimeMs(baseDateMs, sliderOffsetMin))
-  // Fase lunare all'orario in uso (geocentrica, standard): blocco centrato
-  // nella barra Tempo e % C/D nelle righe dei risultati allineamenti.
+  // Fase lunare all'orario in uso (geocentrica, standard): blocco a destra
+  // della riga slider nella barra Tempo, % C/D nei risultati allineamenti.
   const phaseNow = moonPhase(effectiveDate)
 
   const points: Record<PlannerPointId, GeoPoint | null> = { observer, target }
@@ -642,10 +658,10 @@ export default function App() {
           Manuale
         </button>
         <div
-          style={TIME_READOUT_STYLE}
-          title="Orario effettivo della scena (Data/ora + slider): aggiorna con slider, ±1 min e adozioni"
+          style={DEV_STATUS_STYLE}
+          title="Ultimo task completato nel piano di sviluppo (docs/ai/TASKS.md): aggiornato a ogni task chiuso"
         >
-          Orario in uso: <strong>{formatLocalDateTime(effectiveDate)}</strong>
+          Sviluppo: <strong>{DEVELOPMENT_STATUS}</strong>
         </div>
       </div>
       <div style={MAIN_ROW_STYLE}>
@@ -930,65 +946,73 @@ export default function App() {
         </div>
       </div>
       <div style={TEMPO_CARD_STYLE}>
-        <div style={TIME_ROW_STYLE}>
-          <label style={ROW_STYLE}>
-            Data/ora (fuso: {browserTimeZone()})
+        <div style={TEMPO_LEFT_STYLE}>
+          <div style={TIME_ROW_STYLE}>
+            <label style={ROW_STYLE}>
+              Data/ora (fuso: {browserTimeZone()})
+              <input
+                type="datetime-local"
+                value={dateToLocalInputValue(new Date(baseDateMs))}
+                onChange={(event) => {
+                  const ms = localInputValueToMs(event.target.value)
+                  if (!Number.isNaN(ms)) {
+                    setBaseDateMs(ms)
+                    setSliderOffsetMin(0)
+                  }
+                }}
+              />
+            </label>
+            <button
+              onClick={() => setBaseDateMs(baseDateMs - 60_000)}
+              style={BUTTON_STYLE}
+              title="Indietro di 1 minuto (non muove lo slider)"
+            >
+              −1 min
+            </button>
+            <button
+              onClick={() => setBaseDateMs(baseDateMs + 60_000)}
+              style={BUTTON_STYLE}
+              title="Avanti di 1 minuto (non muove lo slider)"
+            >
+              +1 min
+            </button>
+          </div>
+          <div style={TIME_ROW_STYLE}>
+            <div
+              style={ROW_STYLE}
+              title="Orario effettivo della scena (Data/ora + slider): aggiorna con slider, ±1 min e adozioni"
+            >
+              Orario in uso: <strong>{formatLocalDateTime(effectiveDate)}</strong>
+            </div>
             <input
-              type="datetime-local"
-              value={dateToLocalInputValue(new Date(baseDateMs))}
-              onChange={(event) => {
-                const ms = localInputValueToMs(event.target.value)
-                if (!Number.isNaN(ms)) {
-                  setBaseDateMs(ms)
-                  setSliderOffsetMin(0)
-                }
-              }}
+              type="range"
+              min={-720}
+              max={720}
+              step={5}
+              value={sliderOffsetMin}
+              onChange={(event) => setSliderOffsetMin(Number(event.target.value))}
+              style={{ width: 220 }}
+              aria-label="Scostamento temporale in minuti"
             />
-          </label>
-          <button
-            onClick={() => setBaseDateMs(baseDateMs - 60_000)}
-            style={BUTTON_STYLE}
-            title="Indietro di 1 minuto (non muove lo slider)"
-          >
-            −1 min
-          </button>
-          <button
-            onClick={() => setBaseDateMs(baseDateMs + 60_000)}
-            style={BUTTON_STYLE}
-            title="Avanti di 1 minuto (non muove lo slider)"
-          >
-            +1 min
-          </button>
-        </div>
-        <div style={TIME_ROW_STYLE}>
-          <input
-            type="range"
-            min={-720}
-            max={720}
-            step={5}
-            value={sliderOffsetMin}
-            onChange={(event) => setSliderOffsetMin(Number(event.target.value))}
-            style={{ width: 220 }}
-            aria-label="Scostamento temporale in minuti"
-          />
-          <span>
-            {sliderOffsetMin >= 0 ? '+' : ''}
-            {sliderOffsetMin} min
-          </span>
-          <button
-            onClick={() => {
-              setBaseDateMs(Date.now())
-              setSliderOffsetMin(0)
-            }}
-            style={BUTTON_STYLE}
-          >
-            Adesso
-          </button>
-        </div>
-        <div style={ROW_STYLE}>
-          Tempo effettivo (UTC): {effectiveDate.toISOString().replace('T', ' ').slice(0, 19)} UTC
-          · ora locale {localUtcOffsetLabel(effectiveDate)} (con ora legale/solare del fuso{' '}
-          {browserTimeZone()})
+            <span>
+              {sliderOffsetMin >= 0 ? '+' : ''}
+              {sliderOffsetMin} min
+            </span>
+            <button
+              onClick={() => {
+                setBaseDateMs(Date.now())
+                setSliderOffsetMin(0)
+              }}
+              style={BUTTON_STYLE}
+            >
+              Adesso
+            </button>
+          </div>
+          <div style={ROW_STYLE}>
+            Tempo effettivo (UTC): {effectiveDate.toISOString().replace('T', ' ').slice(0, 19)} UTC
+            · ora locale {localUtcOffsetLabel(effectiveDate)} (con ora legale/solare del fuso{' '}
+            {browserTimeZone()})
+          </div>
         </div>
         <MoonPhaseCard phase={phaseNow} />
       </div>
