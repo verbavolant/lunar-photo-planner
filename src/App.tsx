@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import type { Viewer } from 'cesium'
 import CesiumViewer from './cesium/CesiumViewer'
 import CameraPovCard from './cesium/CameraPovCard'
+import { createTerrainHeightSampler } from './cesium/terrainSample'
 import { flyToObserverView, flyToOverhead, moveCameraWithObserver } from './cesium/camera'
 import { moonTopocentric } from './astronomy/moon'
 import {
@@ -20,6 +21,15 @@ import {
   type AlignmentOffsets,
   type AlignmentSearchResult,
 } from './planning/alignment'
+import {
+  buildTerrainPolarGrid,
+  REVERSE_SCAN_FIRST_DISTANCE_M,
+  REVERSE_SCAN_STEP_M,
+  scanDistancesM,
+  searchReverseAlignments,
+  type ReverseAlignmentCandidate,
+  type ReverseAlignmentSearchResult,
+} from './planning/reverseAlignment'
 import { formatAngleDeg, formatDistanceM } from './planning/format'
 import { loadSavedHome, saveHome, type SavedHome } from './planning/homeStorage'
 import {
@@ -62,7 +72,12 @@ const TOOLBAR_STYLE = {
 // l'ID dell'ultimo task completato nel piano (docs/ai/TASKS.md), così l'umano
 // vede sul live fino a dove è arrivato lo sviluppo. Aggiornare la costante a
 // ogni task chiuso.
-const DEVELOPMENT_STATUS = 'T-059'
+const DEVELOPMENT_STATUS = 'T-060'
+
+// Distanza massima Observer↔Target esplorata dal Reverse Planner (T-060), in
+// metri: default 2 km (scala urbana, copertura dei Google 3D Tiles), editabile
+// 100–20.000 nella finestra di ricerca.
+const DEFAULT_REVERSE_MAX_DISTANCE_M = 2000
 
 const DEV_STATUS_STYLE = {
   marginLeft: 'auto',
@@ -336,6 +351,27 @@ export default function App() {
   // Ultimo candidato adottato (T-053): la riga corrispondente nell'elenco
   // appare in grassetto; a ogni nuova ricerca riparte da zero.
   const [adoptedAlignmentMs, setAdoptedAlignmentMs] = useState<number | null>(null)
+  // Reverse Planner (T-060): stessa struttura della finestra Allineamenti.
+  // I default di finestra/tolleranza (e il passo coarse e maxResults, non
+  // editabili qui) sono quelli della Fase 6.
+  const [reverseWindowOpen, setReverseWindowOpen] = useState(false)
+  const [reverseSearch, setReverseSearch] = useState<ReverseAlignmentSearchResult | null>(null)
+  // Campo «Ricerca da»: stessa semantica del campo Allineamenti (vuoto o
+  // invalido → si parte dall'orario effettivo, che torna nel campo).
+  const [reverseFromInput, setReverseFromInput] = useState('')
+  const [reverseNote, setReverseNote] = useState<string | null>(null)
+  const [reverseDays, setReverseDays] = useState(DEFAULT_ALIGNMENT_DAYS)
+  const [reverseToleranceDeg, setReverseToleranceDeg] = useState<number>(
+    DEFAULT_ALIGNMENT_SEARCH.toleranceDeg,
+  )
+  const [reverseMaxDistanceM, setReverseMaxDistanceM] = useState<number>(
+    DEFAULT_REVERSE_MAX_DISTANCE_M,
+  )
+  // Campionamento del terreno in corso: la griglia è async (sampler Cesium sui
+  // 3D Tiles), la ricerca che segue è sincrona e pura (ADR-018).
+  const [reverseBusy, setReverseBusy] = useState(false)
+  // Chiave del candidato adottato (data + distanza): riga in grassetto (T-053).
+  const [adoptedReverseKey, setAdoptedReverseKey] = useState<string | null>(null)
   const effectiveDate = new Date(effectiveTimeMs(baseDateMs, sliderOffsetMin))
   // Fase lunare all'orario in uso (geocentrica, standard): blocco a destra
   // della riga slider nella barra Tempo, % C/D nei risultati allineamenti.
@@ -570,6 +606,100 @@ export default function App() {
     // l'umano può adottare altri candidati senza premere Ricalcola.
   }
 
+  /** Chiave stabile di una riga risultato del Reverse Planner (data + distanza). */
+  function reverseCandidateKey(candidate: ReverseAlignmentCandidate): string {
+    return `${candidate.dateMs}-${candidate.distanceM.toFixed(0)}`
+  }
+
+  /**
+   * Reverse Planner (T-060): prima la griglia polare del terreno (async: il
+   * sampler Cesium campiona i 3D Tiles in batch ≤ 512), poi la ricerca
+   * temporale, sincrona e pura (ADR-018). Nessun ricaricamento dei 3D Tiles:
+   * il sampling usa la stessa sessione già in scena e le quote non dipendono
+   * dal tempo.
+   */
+  async function runReverseSearch(): Promise<void> {
+    if (target === null) {
+      return
+    }
+    const activeViewer = viewerRef.current
+    if (activeViewer === null || activeViewer.isDestroyed()) {
+      setReverseNote('La scena 3D non è pronta: attendi il caricamento e riprova.')
+      setReverseSearch(null)
+      setReverseWindowOpen(true)
+      return
+    }
+    // «Ricerca da» come in Fase 6: vuoto/invalido → orario effettivo, che
+    // torna nel campo.
+    const fromInputMs = localInputValueToMs(reverseFromInput)
+    const fromMs = Number.isNaN(fromInputMs) ? effectiveDate.getTime() : fromInputMs
+    if (Number.isNaN(fromInputMs)) {
+      setReverseFromInput(dateToLocalInputValue(new Date(fromMs)))
+    }
+    setReverseBusy(true)
+    setReverseNote(null)
+    setReverseSearch(null)
+    setAdoptedReverseKey(null)
+    try {
+      const grid = await buildTerrainPolarGrid(
+        target,
+        scanDistancesM(REVERSE_SCAN_FIRST_DISTANCE_M, REVERSE_SCAN_STEP_M, reverseMaxDistanceM),
+        createTerrainHeightSampler(activeViewer),
+      )
+      const totalCells = grid.columns.length * grid.distancesM.length
+      const sampledCells = grid.columns.reduce(
+        (count, column) => count + column.cells.filter((cell) => cell !== null).length,
+        0,
+      )
+      if (sampledCells === 0) {
+        setReverseNote(
+          'Terreno non campionabile: nessuna quota disponibile (tile non caricati o fuori copertura). Avvicinati al Target e riprova.',
+        )
+        return
+      }
+      const result = searchReverseAlignments({
+        target,
+        terrainGrid: grid,
+        fromDateMs: fromMs,
+        durationHours: reverseDays * 24,
+        coarseStepMinutes: DEFAULT_ALIGNMENT_SEARCH.stepMinutes,
+        toleranceDeg: reverseToleranceDeg,
+        minMoonAltitudeDeg: DEFAULT_ALIGNMENT_SEARCH.minMoonAltitudeDeg,
+        maxResults: DEFAULT_ALIGNMENT_SEARCH.maxResults,
+      })
+      setReverseSearch(result)
+      if (sampledCells < totalCells) {
+        setReverseNote(
+          `Copertura terreno parziale: ${sampledCells} celle campionate su ${totalCells}; le distanze senza quota sono escluse.`,
+        )
+      }
+    } catch (error) {
+      setReverseNote(
+        error instanceof Error
+          ? `Ricerca Reverse Planner fallita: ${error.message}`
+          : 'Ricerca Reverse Planner fallita.',
+      )
+    } finally {
+      setReverseBusy(false)
+      setReverseWindowOpen(true)
+    }
+  }
+
+  /**
+   * Adotta un candidato del Reverse Planner: sposta l'Observer sul punto
+   * trovato (quota = suolo campionato, altezza dal suolo 0 per costruzione) e
+   * imposta l'orario. Come in Fase 6 la finestra resta aperta.
+   */
+  function adoptReverseCandidate(candidate: ReverseAlignmentCandidate): void {
+    setObserver(candidate.observer)
+    // Il suolo di riferimento del nuovo Observer è la quota campionata: la
+    // riga «Altezza dal suolo» resta coerente senza ricampionare (ADR-012).
+    setObserverGroundM(candidate.observer.heightM)
+    setBaseDateMs(candidate.dateMs)
+    setSliderOffsetMin(0)
+    setAdoptedReverseKey(reverseCandidateKey(candidate))
+  }
+
   function flyToObserverOverhead(): void {
     if (observer === null) {
       return
@@ -649,6 +779,16 @@ export default function App() {
           title="Cerca gli istanti in cui la Luna passa sulla linea Observer→Target, dal campo «Ricerca da» in avanti"
         >
           Cerca allineamenti Luna
+        </button>
+        <button
+          onClick={() => {
+            void runReverseSearch()
+          }}
+          disabled={reverseBusy || target === null}
+          style={BUTTON_STYLE}
+          title="Reverse Planner: cerca dove e quando stare per avere la Luna dietro/il Target (richiede il Target; campiona il terreno sui 3D Tiles in scena, senza ricaricarli)"
+        >
+          {reverseBusy ? 'Reverse: campionamento…' : 'Cerca luogo per il Target'}
         </button>
         <button
           onClick={openManualeWindow}
@@ -919,6 +1059,151 @@ export default function App() {
                   }
                   title="Adotta questo istante come data/ora della vista"
                 >
+                  <div style={ROW_STYLE}>
+                    {formatLocalDateTime(new Date(candidate.dateMs))} · sep{' '}
+                    {formatAngleDeg(candidate.separationDeg, 2)} ·{' '}
+                    {describeAlignmentOffsets(candidate)}
+                  </div>
+                  <div>
+                    fase {moonPhaseLabel(moonPhase(new Date(candidate.dateMs)))}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+          {reverseWindowOpen && (
+            <div style={ALIGNMENT_WINDOW_STYLE}>
+              <div style={WINDOW_HEADER_STYLE}>
+                <span>Reverse Planner · Luna dietro/il Target</span>
+                <button
+                  onClick={() => {
+                    void runReverseSearch()
+                  }}
+                  disabled={reverseBusy}
+                  style={BUTTON_STYLE}
+                  title="Ripete campionamento del terreno e ricerca con i parametri attuali"
+                >
+                  Ricalcola
+                </button>
+                <button
+                  onClick={() => setReverseWindowOpen(false)}
+                  style={BUTTON_STYLE}
+                  title="Chiude la finestra"
+                >
+                  ×
+                </button>
+              </div>
+              <div style={WINDOW_PARAMS_STYLE}>
+                <label style={PARAM_LABEL_STYLE}>
+                  Finestra (giorni)
+                  <input
+                    type="number"
+                    min={1}
+                    max={365}
+                    value={reverseDays}
+                    onChange={(event) =>
+                      setReverseDays(clampInt(event.target.value, 1, 365, DEFAULT_ALIGNMENT_DAYS))
+                    }
+                    style={NUMBER_INPUT_STYLE}
+                  />
+                </label>
+                <label style={PARAM_LABEL_STYLE}>
+                  Tolleranza (°)
+                  <input
+                    type="number"
+                    min={0.05}
+                    max={10}
+                    step={0.05}
+                    value={reverseToleranceDeg}
+                    onChange={(event) =>
+                      setReverseToleranceDeg(
+                        clampFloat(
+                          event.target.value,
+                          0.05,
+                          10,
+                          DEFAULT_ALIGNMENT_SEARCH.toleranceDeg,
+                        ),
+                      )
+                    }
+                    style={NUMBER_INPUT_STYLE}
+                  />
+                </label>
+                <label style={PARAM_LABEL_STYLE}>
+                  Distanza max (m)
+                  <input
+                    type="number"
+                    min={100}
+                    max={20000}
+                    step={100}
+                    value={reverseMaxDistanceM}
+                    onChange={(event) =>
+                      setReverseMaxDistanceM(
+                        clampInt(event.target.value, 100, 20000, DEFAULT_REVERSE_MAX_DISTANCE_M),
+                      )
+                    }
+                    style={NUMBER_INPUT_STYLE}
+                    title="Distanza massima Observer↔Target esplorata lungo il radiale"
+                  />
+                </label>
+                <label style={PARAM_LABEL_STYLE}>
+                  Ricerca da
+                  <input
+                    type="datetime-local"
+                    value={reverseFromInput}
+                    onChange={(event) => setReverseFromInput(event.target.value)}
+                    title="Istante di partenza della ricerca, anche nel passato; la fine è inizio + Finestra (giorni)"
+                  />
+                </label>
+              </div>
+              <div style={ROW_STYLE}>
+                max {DEFAULT_ALIGNMENT_SEARCH.maxResults} risultati per ricerca
+              </div>
+              {reverseBusy && <div style={ROW_STYLE}>Campionamento del terreno in corso…</div>}
+              {reverseNote !== null && <div style={ROW_STYLE}>{reverseNote}</div>}
+              {reverseNote === null && reverseSearch !== null &&
+                reverseSearch.candidates.length === 0 && (
+                  <div style={ROW_STYLE}>Nessun candidato nella finestra cercata.</div>
+                )}
+              {reverseSearch !== null &&
+                reverseSearch.totalFound > reverseSearch.candidates.length && (
+                  <div style={ROW_STYLE}>
+                    Trovati {reverseSearch.totalFound} passaggi · mostro i primi{' '}
+                    {reverseSearch.candidates.length} (i migliori per separazione)
+                  </div>
+                )}
+              {reverseSearch !== null && reverseSearch.discardedBelowHorizon > 0 && (
+                <div style={ROW_STYLE}>
+                  {reverseSearch.discardedBelowHorizon}{' '}
+                  {reverseSearch.discardedBelowHorizon === 1
+                    ? 'passaggio scartato'
+                    : 'passaggi scartati'}{' '}
+                  (Luna sotto l'orizzonte)
+                </div>
+              )}
+              {reverseSearch !== null && reverseSearch.discardedRefinement > 0 && (
+                <div style={ROW_STYLE}>
+                  {reverseSearch.discardedRefinement}{' '}
+                  {reverseSearch.discardedRefinement === 1
+                    ? 'passaggio scartato'
+                    : 'passaggi scartati'}{' '}
+                  (fuori tolleranza al ricalcolo esatto)
+                </div>
+              )}
+              {reverseSearch?.candidates.map((candidate) => (
+                <button
+                  key={reverseCandidateKey(candidate)}
+                  onClick={() => adoptReverseCandidate(candidate)}
+                  style={
+                    reverseCandidateKey(candidate) === adoptedReverseKey
+                      ? ALIGNMENT_ROW_ADOPTED_STYLE
+                      : ALIGNMENT_ROW_BUTTON_STYLE
+                  }
+                  title="Adotta: sposta l'Observer sul punto candidato (quota = suolo campionato) e imposta l'orario"
+                >
+                  <div style={ROW_STYLE}>
+                    {formatPoint(candidate.observer)} · {formatDistanceM(candidate.distanceM)} dal
+                    Target
+                  </div>
                   <div style={ROW_STYLE}>
                     {formatLocalDateTime(new Date(candidate.dateMs))} · sep{' '}
                     {formatAngleDeg(candidate.separationDeg, 2)} ·{' '}

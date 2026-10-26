@@ -65,7 +65,7 @@
 ┌──────────────────────────────────────────────────────────────────────────┐
 │ BARRETTA COMANDI  Osservatore · Target · Azzera · Vai a Home ·           │
 │    Imposta come Home · Vista Luna · Sopra Observer · 100 m ·             │
-│    Cerca allineamenti Luna      Sviluppo: T-059                          │
+│    Cerca allineamenti Luna · Cerca luogo per il Target    Sviluppo: T-060│
 ├───────────────────────────┬──────────────────────────────────────────────┤
 │ BOX LATERALE (≈380 px)    │                                              │
 │  • POV camera             │            SCENA 3D                          │
@@ -82,6 +82,8 @@
 ```
 
 Tre zone, nessuna zona morta: i pannelli non coprono la scena, quindi trascinamento, zoom e clic funzionano su tutta l'area del canvas.
+
+In barra ci sono due ricerche: `Cerca allineamenti Luna` (quando la Luna passa sulla linea Observer→Target, [§6.6](#66-finestra-di-ricerca-cerca-allineamenti-luna)) e `Cerca luogo per il Target` (Reverse Planner: dove e quando stare per avere la Luna dietro/il Target, [§6.8](#68-finestra-di-ricerca-cerca-luogo-per-il-target-reverse-planner)).
 
 Gli **avvisi** (caricamento tile, limiti di richieste, parametri non validi) appaiono centrati in alto sulla scena e spariscono quando il problema si risolve. In basso a destra restano i **crediti** richiesti dai provider (Cesium ion, Google): sono un obbligo contrattuale dei dati, non si possono nascondere.
 
@@ -147,7 +149,7 @@ Premi **`Vista Luna`**: la camera si mette 1 m sopra l'Osservatore, rivolta vers
 | `Cerca allineamenti Luna` | apre la finestra di ricerca degli allineamenti | disabilitato se mancano Osservatore o Target |
 | `Manuale` | apre questo manuale in una **finestra separata**, formattato in HTML | il contenuto è `MANUALE.md` alla root del repository; i collegamenti ai file del repo (es. `README.md`) portano a GitHub |
 
-A destra della barra, oltre ai pulsanti: **`Sviluppo: T-059`** — l'ID dell'ultimo task completato nel piano di sviluppo del progetto; si aggiorna a ogni task chiuso. L'orario in uso non sta qui: è nella card Tempo, accanto allo slider ([§6.7](#67-card-tempo-fascia-in-basso-tutta-larghezza)).
+A destra della barra, oltre ai pulsanti: **`Sviluppo: T-060`** — l'ID dell'ultimo task completato nel piano di sviluppo del progetto; si aggiorna a ogni task chiuso. L'orario in uso non sta qui: è nella card Tempo, accanto allo slider ([§6.7](#67-card-tempo-fascia-in-basso-tutta-larghezza)).
 
 > **Il punto attivo comanda il clic sulla scena.** Se dopo aver posizionato il Target lasci `Target` selezionato e clicchi sulla scena, sposti il **Target**, non l'Osservatore. Controlla quale dei due pulsanti è evidenziato.
 
@@ -266,6 +268,50 @@ L'orario usato per **tutto** (Luna, fase, misure lunari) è `Data/ora + scostame
 
 > Attenzione a cosa è simulato e cosa no: i **numeri** e la **posizione** della Luna seguono il Tempo effettivo, ma l'**illuminazione dinamica del suolo non è attivata** → i tile 3D restano chiari come in pieno giorno anche a mezzanotte. La scena serve a valutare la **geometria**, non l'esposizione dello scatto.
 
+### 6.8 Finestra di ricerca "Cerca luogo per il Target" (Reverse Planner)
+
+Si apre con `Cerca luogo per il Target` (richiede solo il **Target** posizionato; l'Osservatore non serve, è lui il risultato). Intestazione: **`Reverse Planner · Luna dietro/il Target`**, con `Ricalcola` e `×` (chiudi).
+
+È l'inverso della ricerca [§6.6](#66-finestra-di-ricerca-cerca-allineamenti-luna): invece di chiedere «quando la Luna passa sulla linea da qui al Target», chiede «**dove** devo mettermi, e **quando**, per avere la Luna dietro/il Target». Per ogni istante il fotografo viene cercato sul radiale dal Target **opposto all'azimut della Luna**, alla distanza in cui l'elevazione della linea di vista verso il Target eguaglia l'altitudine della Luna (osservatore a terra, altezza occhi 0).
+
+| Parametro | Intervallo | Default | Effetto |
+|---|---|---|---|
+| `Finestra (giorni)` | 1–365 | 60 | giorni esplorati a partire dall'orario in uso |
+| `Tolleranza (°)` | 0,05–10 (passi 0,05) | 5 | separazione angolare massima Luna ↔ linea di vista |
+| `Distanza max (m)` | 100–20.000 (passi 100) | 2.000 | distanza massima Observer↔Target esplorata lungo il radiale |
+| `Ricerca da` | data/ora locale, anche nel passato | orario effettivo al primo avvio | istante di partenza della ricerca; la fine è inizio + `Finestra (giorni)` |
+
+Al primo avvio della ricerca il terreno attorno al Target viene **campionato** (una griglia polare di quote sui 3D Tiles: 180 azimut a passi di 2° × distanze a passi di 50 m): la riga `Campionamento del terreno in corso…` resta finché la griglia non è pronta; la ricerca temporale che segue è immediata. Il campionamento **non ricarica i tiles**: usa quelli già in scena, ma per coprire i 360° attorno al Target può forzare il caricamento dei tile mancanti — la prima ricerca può metterci qualche secondo, le successive sono più veloci (tile già scaricati). Le quote non dipendono dall'orario: cambiare data/ora NON ripete il campionamento.
+
+Messaggi espliciti nella finestra:
+
+- `Terreno non campionabile: nessuna quota disponibile (tile non caricati o fuori copertura). Avvicinati al Target e riprova.` — nessun tile campionabile attorno al Target: zooma vicino al Target e riprova.
+- `Copertura terreno parziale: N celle campionate su M; le distanze senza quota sono escluse.` — alcune posizioni sono senza quota (fuori copertura dei 3D Tiles): i risultati restano validi per le distanze campionate.
+- `Ricerca Reverse Planner fallita: …` — errore del campionamento (scena non pronta, contesto grafico senza supporto al sampling): leggi la causa e riprova.
+- `Nessun candidato nella finestra cercata.` — nessun posto/orario soddisfa la tolleranza nella finestra.
+- `N passaggi scartati (Luna sotto l'orizzonte)` e `N passaggi scartati (fuori tolleranza al ricalcolo esatto)` — scarti dichiarati, come in [§6.6](#66-finestra-di-ricerca-cerca-allineamenti-luna).
+- `Trovati N passaggi · mostro i primi M (i migliori per separazione)` — al massimo 8 risultati, i migliori.
+
+Ogni riga risultato è un pulsante cliccabile:
+
+```
+45.541200°N 10.214500°E · 156 m · 850 m dal Target
+21/10/2026 19:40 · sep 0,32° · 0,11° a destra · 0,29° sopra
+fase 96% C (crescente)
+```
+
+| Pezzo | Significato |
+|---|---|
+| `45.541200°N 10.214500°E · 156 m` | dove mettere l'Osservatore: lat/lon e **quota del suolo campionato** in quel punto |
+| `850 m dal Target` | distanza Observer↔Target lungo il radiale |
+| `21/10/2026 19:40` | istante in **ora locale** del tuo fuso |
+| `sep 0,32°` + `a destra/sinistra`, `sopra/sotto` | stessa lettura di [§6.6](#66-finestra-di-ricerca-cerca-allineamenti-luna) |
+| `fase 96% C (crescente)` | fase lunare in quell'istante |
+
+**Cliccare una riga adotta il candidato**: l'**Observer** viene spostato sul punto indicato (quota = suolo campionato, quindi `Altezza dal suolo` = 0 m) e l'**orario** viene impostato (slider a 0). La riga adottata va in grassetto e la finestra resta aperta: puoi adottare un altro candidato o premere `Ricalcola` con parametri diversi.
+
+> Limiti dichiarati: solo la composizione «dietro/il Target» sul radiale (nessun offset laterale ampio); nessun controllo di occlusione (Fase 8); l'osservatore candidato è a terra, senza altezza occhi. La linea di vista e la Luna in scena dopo l'adozione usano i dati reali del punto adottato.
+
 ---
 
 ## 7. Leggere i numeri (con esempi)
@@ -322,6 +368,8 @@ Conseguenza pratica: a 600 mm su full frame un FOV di 3,44° significa che **0,1
 ## 8. Trovare l'istante giusto: Cerca allineamenti Luna
 
 La ricerca campiona il tempo e cerca gli istanti in cui il **centro del disco lunare** passa vicino alla **linea di vista Osservatore → Target**.
+
+Se invece il problema è inverso — il Target è fisso e cerchi **dove** metterti e **quando** andarci — usa la ricerca del Reverse Planner ([§6.8](#68-finestra-di-ricerca-cerca-luogo-per-il-target-reverse-planner)).
 
 ### 8.1 Preparazione
 
