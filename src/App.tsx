@@ -62,7 +62,7 @@ const TOOLBAR_STYLE = {
 // l'ID dell'ultimo task completato nel piano (docs/ai/TASKS.md), così l'umano
 // vede sul live fino a dove è arrivato lo sviluppo. Aggiornare la costante a
 // ogni task chiuso.
-const DEVELOPMENT_STATUS = 'T-057'
+const DEVELOPMENT_STATUS = 'T-058'
 
 const DEV_STATUS_STYLE = {
   marginLeft: 'auto',
