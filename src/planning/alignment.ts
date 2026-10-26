@@ -77,9 +77,10 @@ export const DEFAULT_ALIGNMENT_SEARCH = {
 /**
  * Passo fine del raffinamento: deve campionare la larghezza del passaggio al
  * limite della tolleranza (≈ 2·tolleranza/velocità), con cap a 1′ e minimo
- * 0,25′ per tolleranze piccole.
+ * 0,25′ per tolleranze piccole. Condiviso con la ricerca del Reverse Planner
+ * (T-059): stessa fisica del moto apparente lunare.
  */
-function refineStepMinutes(toleranceDeg: number): number {
+export function refineStepMinutes(toleranceDeg: number): number {
   return Math.min(
     1,
     Math.max(0.25, toleranceDeg / (3 * MAX_MOON_APPARENT_SPEED_DEG_PER_MIN)),

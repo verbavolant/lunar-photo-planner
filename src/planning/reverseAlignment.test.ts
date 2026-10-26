@@ -14,6 +14,7 @@ import {
   REVERSE_SCAN_STEP_M,
   reverseCandidateAtInstant,
   scanDistancesM,
+  searchReverseAlignments,
   TERRAIN_GRID_AZIMUTH_STEP_DEG,
   TERRAIN_GRID_BATCH_SIZE,
   type ReverseAlignmentCandidate,
@@ -298,5 +299,249 @@ describe('refineReverseCandidate', () => {
     const { coarse, moon } = await flatFixture()
     const refined = refineReverseCandidate(coarse, TARGET, 5, moon.altitudeDeg + 0.01)
     expect(refined).toBeNull()
+  })
+})
+
+describe('searchReverseAlignments', () => {
+  // Primo istante dal 21/01/2026 con la Luna nella fascia di altitudine scelta,
+  // vista dal Target (stessa ricerca della fixture di refineReverseCandidate).
+  function findMoonInstantInBand(
+    minAltitudeDeg: number,
+    maxAltitudeDeg: number,
+  ): { dateMs: number; moon: MoonTopocentric } {
+    const startMs = Date.UTC(2026, 0, 21, 0)
+    for (let hour = 0; hour < 24 * 28; hour++) {
+      const dateMs = startMs + hour * 3_600_000
+      const moon = moonTopocentric(TARGET, new Date(dateMs))
+      if (moon.altitudeDeg >= minAltitudeDeg && moon.altitudeDeg <= maxAltitudeDeg) {
+        return { dateMs, moon }
+      }
+    }
+    throw new Error('Fixture attesa: nessun istante con la Luna nella fascia di altitudine.')
+  }
+
+  async function flatGrid(
+    distancesM: ReadonlyArray<number> = scanDistancesM(
+      REVERSE_SCAN_FIRST_DISTANCE_M,
+      REVERSE_SCAN_STEP_M,
+      975,
+    ),
+  ) {
+    return buildTerrainPolarGrid(TARGET, distancesM, flatSampler(100))
+  }
+
+  it('la scansione coarse a 15 min non perde passaggi rispetto alla riferimento a 2 min', async () => {
+    const { dateMs } = findMoonInstantInBand(10, 17)
+    const grid = await flatGrid()
+    const base = {
+      target: TARGET,
+      terrainGrid: grid,
+      fromDateMs: dateMs - 72 * 3_600_000,
+      durationHours: 144,
+      toleranceDeg: 5,
+      // Senza filtro d'orizzonte: il confronto copre TUTTI i passaggi.
+      minMoonAltitudeDeg: -90,
+    }
+    const reference = searchReverseAlignments({ ...base, coarseStepMinutes: 2, maxResults: 1000 })
+    const scanned = searchReverseAlignments({ ...base, coarseStepMinutes: 15, maxResults: 1000 })
+    expect(reference.candidates.length).toBeGreaterThan(0)
+    expect(scanned.candidates.length).toBeGreaterThan(0)
+    expect(scanned.totalFound).toBeLessThanOrEqual(reference.totalFound)
+    for (const refCandidate of reference.candidates) {
+      const match = scanned.candidates.find(
+        (candidate) => Math.abs(candidate.dateMs - refCandidate.dateMs) <= 15 * 60_000,
+      )
+      expect(match).toBeDefined()
+      // Entrambe le ricerche campionano il minimo del passaggio al passo fine
+      // di 1′: lo scarto fra i due migliori campioni resta sotto ~0,13°.
+      expect(match?.separationDeg).toBeLessThanOrEqual(refCandidate.separationDeg + 0.3)
+    }
+  })
+
+  it('ordina per separazione crescente, tie-break per data, e tronca a maxResults', async () => {
+    const { dateMs } = findMoonInstantInBand(10, 17)
+    const grid = await flatGrid()
+    const base = {
+      target: TARGET,
+      terrainGrid: grid,
+      fromDateMs: dateMs - 72 * 3_600_000,
+      durationHours: 144,
+      coarseStepMinutes: 15,
+      toleranceDeg: 5,
+      minMoonAltitudeDeg: 0,
+    }
+    const full = searchReverseAlignments({ ...base, maxResults: 1000 })
+    expect(full.totalFound).toBeGreaterThan(3)
+    const truncated = searchReverseAlignments({ ...base, maxResults: 3 })
+    expect(truncated.totalFound).toBe(full.totalFound)
+    expect(truncated.candidates).toHaveLength(3)
+    expect(truncated.candidates).toEqual(full.candidates.slice(0, 3))
+    for (let index = 1; index < truncated.candidates.length; index++) {
+      const previous = truncated.candidates[index - 1]
+      const current = truncated.candidates[index]
+      if (previous === undefined || current === undefined) {
+        continue
+      }
+      expect(previous.separationDeg).toBeLessThanOrEqual(current.separationDeg)
+      if (previous.separationDeg === current.separationDeg) {
+        expect(previous.dateMs).toBeLessThanOrEqual(current.dateMs)
+      }
+    }
+  })
+
+  it('scarta e conta i passaggi con la Luna sotto la soglia di altitudine', async () => {
+    const { dateMs } = findMoonInstantInBand(10, 17)
+    // Solo le distanze 475–525 m: con piatto a quota 100 l'altitudine della LOS
+    // è ~5,6–6,7°, quindi ogni passaggio ha la Luna sotto la soglia di 30°.
+    const grid = await buildTerrainPolarGrid(TARGET, scanDistancesM(475, 50, 525), flatSampler(100))
+    const base = {
+      target: TARGET,
+      terrainGrid: grid,
+      fromDateMs: dateMs - 72 * 3_600_000,
+      durationHours: 144,
+      coarseStepMinutes: 15,
+      toleranceDeg: 5,
+      maxResults: 8,
+    }
+    const filtered = searchReverseAlignments({ ...base, minMoonAltitudeDeg: 30 })
+    expect(filtered.candidates).toHaveLength(0)
+    expect(filtered.totalFound).toBe(0)
+    expect(filtered.discardedRefinement).toBe(0)
+    expect(filtered.discardedBelowHorizon).toBeGreaterThan(0)
+    const admitted = searchReverseAlignments({ ...base, minMoonAltitudeDeg: 0, maxResults: 1000 })
+    expect(admitted.candidates.length).toBeGreaterThan(0)
+    expect(admitted.discardedBelowHorizon).toBe(0)
+    expect(admitted.totalFound).toBe(admitted.candidates.length)
+  })
+
+  it('un passaggio ammesso dalla scansione ma respinto dal ricalcolo esatto è contato in discardedRefinement', async () => {
+    // Luna a est/ovest (azimut ≈ 90°/270°) con altitudine 10–17°: lì la
+    // rotazione della normale ellissoide fra Target e Observer (≈ d/R, asse
+    // nord-sud) agisce TUTTA sull'altitudine della Luna vista dal candidato,
+    // mentre la scansione misura con la Luna vista dal Target. A 8 km lo
+    // scarto è ~0,072°, misurabile con una tolleranza piccola ma stabile.
+    const startMs = Date.UTC(2026, 0, 21, 0)
+    let fixture: { dateMs: number; moon: MoonTopocentric } | null = null
+    for (let minutes = 0; minutes < 60 * 24 * 45 && fixture === null; minutes += 3) {
+      const dateMs = startMs + minutes * 60_000
+      const moon = moonTopocentric(TARGET, new Date(dateMs))
+      const nearEastOrWest =
+        Math.abs(moon.azimuthDeg - 90) <= 1 || Math.abs(moon.azimuthDeg - 270) <= 1
+      if (moon.altitudeDeg >= 10 && moon.altitudeDeg <= 17 && nearEastOrWest) {
+        fixture = { dateMs, moon }
+      }
+    }
+    if (fixture === null) {
+      throw new Error('Fixture attesa: Luna a est/ovest fra 10° e 17° entro 45 giorni.')
+    }
+    const { dateMs, moon } = fixture
+    const candidateBase = movePointOnWGS84(TARGET, moon.azimuthDeg + 180, 8000)
+    // Bisezione sulla quota del piatto: linea di vista ESATTA dal candidato a
+    // 8 km = altitudine della Luna vista dal Target → la separazione di
+    // scansione ha solo il termine di azimut (convergenza dei meridiani,
+    // ≈ 0,073° a 8 km), il ricalcolo esatto vi somma in quadratura il termine
+    // d'altitudine (~0,072°) → ~0,101°.
+    let low = TARGET.heightM - 4000
+    let high = TARGET.heightM
+    for (let iteration = 0; iteration < 60; iteration++) {
+      const mid = (low + high) / 2
+      const losAltitudeDeg = verticalAngleDeg({ ...candidateBase, heightM: mid }, TARGET)
+      if (losAltitudeDeg > moon.altitudeDeg) {
+        low = mid
+      } else {
+        high = mid
+      }
+    }
+    const groundHeightM = (low + high) / 2
+    const grid = await buildTerrainPolarGrid(TARGET, [8000], flatSampler(groundHeightM))
+    const base = {
+      target: TARGET,
+      terrainGrid: grid,
+      fromDateMs: dateMs - 6 * 3_600_000,
+      durationHours: 12,
+      coarseStepMinutes: 15,
+      minMoonAltitudeDeg: -90,
+      maxResults: 10,
+    }
+    // Tolleranza 0,06°: la scansione ammette il passaggio (miglior campione
+    // ≤ ~0,048°: termine di azimut ≈ 0,035° + quantizzazione fine), il
+    // ricalcolo esatto lo respinge: l'azimut della Luna vista dal candidato è
+    // shiftato dalla convergenza del meridiano (~0,073°), che annulla il
+    // termine di azimut, e l'altitudine della normale ellissoide (d/R ≈
+    // 0,072°) vi si somma in quadratura → ~0,080° > 0,06°.
+    const strict = searchReverseAlignments({ ...base, toleranceDeg: 0.06 })
+    expect(strict.candidates).toHaveLength(0)
+    expect(strict.discardedRefinement).toBe(1)
+    expect(strict.discardedBelowHorizon).toBe(0)
+    // Con tolleranza 0,5° lo stesso passaggio è ammesso dal ricalcolo esatto.
+    const tolerant = searchReverseAlignments({ ...base, toleranceDeg: 0.5 })
+    expect(tolerant.candidates).toHaveLength(1)
+    expect(tolerant.discardedRefinement).toBe(0)
+  })
+
+  it('valida i parametri della ricerca', async () => {
+    const grid = await flatGrid()
+    const base = {
+      target: TARGET,
+      terrainGrid: grid,
+      fromDateMs: Date.UTC(2026, 0, 21, 0),
+      durationHours: 24,
+      coarseStepMinutes: 15,
+      toleranceDeg: 5,
+      minMoonAltitudeDeg: 0,
+      maxResults: 8,
+    }
+    expect(() =>
+      searchReverseAlignments({ ...base, target: { ...TARGET, heightM: TARGET.heightM + 1 } }),
+    ).toThrow(RangeError)
+    expect(() => searchReverseAlignments({ ...base, durationHours: 0 })).toThrow(RangeError)
+    expect(() => searchReverseAlignments({ ...base, coarseStepMinutes: 0 })).toThrow(RangeError)
+    expect(() => searchReverseAlignments({ ...base, toleranceDeg: -1 })).toThrow(RangeError)
+    expect(() => searchReverseAlignments({ ...base, maxResults: 1.5 })).toThrow(RangeError)
+  })
+
+  it('finestra senza passaggi: nessun candidato e contatori a zero', async () => {
+    const grid = await flatGrid()
+    const result = searchReverseAlignments({
+      target: TARGET,
+      terrainGrid: grid,
+      fromDateMs: Date.UTC(2026, 0, 21, 0),
+      durationHours: 48,
+      coarseStepMinutes: 15,
+      toleranceDeg: 1e-6,
+      minMoonAltitudeDeg: 0,
+      maxResults: 8,
+    })
+    expect(result.candidates).toHaveLength(0)
+    expect(result.totalFound).toBe(0)
+    expect(result.discardedBelowHorizon).toBe(0)
+    expect(result.discardedRefinement).toBe(0)
+    expect(result.evaluatedInstants).toBeGreaterThan(0)
+  })
+
+  it('benchmark documentato: finestra di 60 giorni con griglia piatta', async () => {
+    const grid = await flatGrid()
+    const start = performance.now()
+    const result = searchReverseAlignments({
+      target: TARGET,
+      terrainGrid: grid,
+      fromDateMs: Date.UTC(2026, 0, 21, 0),
+      durationHours: 60 * 24,
+      coarseStepMinutes: 15,
+      toleranceDeg: 5,
+      minMoonAltitudeDeg: 0,
+      maxResults: 8,
+    })
+    const elapsedMs = performance.now() - start
+    // Budget generoso per l'hardware di CI: il test deve rompersi solo a fronte
+    // di una regressione di un ordine di grandezza; i numeri misurati vanno
+    // registrati in ADR-018 (docs/ai/DECISIONS.md).
+    expect(elapsedMs).toBeLessThan(30_000)
+    expect(result.candidates.length).toBeGreaterThan(0)
+    console.log(
+      `benchmark reverse 60 gg: ${elapsedMs.toFixed(0)} ms, ` +
+        `${result.evaluatedInstants} istanti valutati, ` +
+        `${result.totalFound} passaggi ammessi (mostrati ${result.candidates.length})`,
+    )
   })
 })
