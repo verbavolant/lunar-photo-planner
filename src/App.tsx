@@ -117,7 +117,12 @@ const SIDEBAR_STYLE = {
   flexDirection: 'column' as const,
   gap: 8,
   width: 380,
-  flexShrink: 0,
+  // T-065: sotto ~400 px la colonna non sta più accanto alla vista: si
+  // stringe fino a occupare tutta la larghezza (la vista 3D resta a 0) invece
+  // di mandare la pagina in overflow orizzontale. Sopra 380 px non cambia
+  // nulla (shrink 1 non agisce con spazio libero).
+  maxWidth: '100%',
+  flexShrink: 1,
   padding: 8,
   overflowY: 'auto' as const,
 }
@@ -171,6 +176,9 @@ const TEMPO_CARD_STYLE = {
   gap: 16,
   borderRadius: 0,
   flexShrink: 0,
+  // T-065: a viewport stretti il blocco Fase lunare passa sotto la colonna
+  // data/ora invece di spingere la card oltre la larghezza della pagina.
+  flexWrap: 'wrap' as const,
 }
 
 // Colonna sinistra della card Tempo (T-056): le tre righe data/ora.
@@ -181,14 +189,21 @@ const TEMPO_LEFT_STYLE = {
   minWidth: 0,
 }
 
+// T-065: le righe vanno a capo se troppo lunghe per la larghezza disponibile
+// (candidati allineamenti/reverse, note lunghe): prima il nowrap mandava la
+// sidebar in scroll orizzontale. minWidth 0 lascia stringere le righe dentro
+// flex e grid (min-width auto le bloccherebbe sul contenuto).
 const ROW_STYLE = {
-  whiteSpace: 'nowrap' as const,
+  minWidth: 0,
 }
 
 const TIME_ROW_STYLE = {
   display: 'flex',
   alignItems: 'center',
   gap: 8,
+  // T-065: nella card Tempo stretta la riga orario + slider va a capo invece
+  // di straripare (i controlli hanno larghezza intrinseca non comprimibile).
+  flexWrap: 'wrap' as const,
 }
 
 const DIVIDER_STYLE = {
@@ -222,7 +237,6 @@ const WINDOW_HEADER_STYLE = {
 const ALIGNMENT_ROW_BUTTON_STYLE = {
   ...BUTTON_STYLE,
   textAlign: 'left' as const,
-  whiteSpace: 'nowrap' as const,
 }
 
 // Riga risultato adottata (T-053): stessa riga con il testo in grassetto.

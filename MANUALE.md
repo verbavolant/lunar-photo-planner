@@ -567,6 +567,7 @@ Sono i limiti **noti e voluti** dell'attuale release, non bug da segnalare:
 | Fuso orario | Sempre quello del **browser**. Per pianificare all'estero, considera lo scostamento a mano. |
 | Dati 3D | La mesh fotorealistica arriva da Google (via Cesium ion o via Map Tiles API, a seconda della configurazione: [§9](#9-parametri-nellurl-provider-tilemaxm-tilequality)) ed è disponibile solo per le aree coperte dal servizio; disponibilità e risoluzione dipendono dal provider, non dall'app. |
 | Qualità della mesh | Il livello scelto (`Alta`/`Media`/`Eco`) tocca **solo quanto dettaglio viene disegnato**: quote, altezze e occlusione sono misurate sul dato a massima risoluzione e non cambiano col livello. Con `Eco` ingombri e distanze restano attendibili, la resa visiva è volutamente più povera. |
+| Schermi stretti | Sotto ~420 px di larghezza la colonna sinistra occupa tutto lo schermo e la vista 3D non ha spazio: l'app è pensata per desktop/tablet in orizzontale. I pannelli restano leggibili e scrollabili e le righe lunghe vanno a capo. |
 
 ---
 
