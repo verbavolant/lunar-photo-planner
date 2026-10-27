@@ -149,6 +149,7 @@ Premi **`Vista Luna`**: la camera si mette 1 m sopra l'Osservatore, rivolta vers
 | `Sopra Observer · 100 m` | vista dall'alto 100 m sopra l'Osservatore, puntato su di lui, nord in alto | disabilitato finché l'Osservatore non è posizionato |
 | `Cerca allineamenti Luna` | apre la finestra di ricerca degli allineamenti | disabilitato se mancano Osservatore o Target |
 | «Qualità tiles» (menu) | sceglie quanto dettaglio caricare nella mesh 3D: `Alta`, `Media`, `Eco` (default) | si applica **a caldo**, senza ricaricare la scena; quote e occlusione non cambiano col livello ([§9](#9-parametri-nellurl-provider-tilemaxm-tilequality)) |
+| «Caricamento tiles: N%» (testo, compare solo mentre i tile arrivano) | mostra l'avanzamento del caricamento della mesh 3D; sparisce a caricamento concluso | la percentuale è una **stima**: CesiumJS non espone il totale dei tile da caricare (il conteggio delle richieste in corso è esatto); dettagli in [§9](#9-parametri-nellurl-provider-tilemaxm-tilequality) |
 | `Manuale` | apre questo manuale in una **finestra separata**, formattato in HTML | il contenuto è `MANUALE.md` alla root del repository; i collegamenti ai file del repo (es. `README.md`) portano a GitHub |
 
 A destra della barra, oltre ai pulsanti: **`Sviluppo: T-061`** — l'ID dell'ultimo task completato nel piano di sviluppo del progetto; si aggiorna a ogni task chiuso. L'orario in uso non sta qui: è nella card Tempo, accanto allo slider ([§6.7](#67-card-tempo-fascia-in-basso-tutta-larghezza)).
@@ -481,6 +482,8 @@ Un valore non numerico o ≤ 0 viene ignorato con avviso e si torna a 1000 m.
 Quote di suolo, altezza dal suolo e occlusione **non cambiano** col livello: sono misurate sul dato a massima risoluzione disponibile ([§6.9](#69-occlusione-della-linea-di-vista)), a prescindere da quanto dettaglio viene disegnato. Contropartita dei livelli economici: la cache dei tile è più piccola, quindi navigando a lungo nella stessa zona qualche tile può essere riscaricato.
 
 Un valore non riconosciuto produce un avviso a schermo e il ritorno a `eco`.
+
+**Indicatore «Caricamento tiles».** Mentre la mesh sta caricando, la barra comandi mostra `Caricamento tiles: N%` accanto al menu qualità; a caricamento concluso l'indicatore sparisce. La percentuale è una **stima**: l'API di CesiumJS non espone il numero totale di tile da caricare, quindi l'app calcola l'avanzamento sul picco di richieste osservato nella raffica in corso (il conteggio delle richieste pendenti è invece esatto). Serve a capire *quanto* sta arrivando, non come misura esatta.
 
 ---
 

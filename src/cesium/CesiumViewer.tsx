@@ -17,6 +17,7 @@ import {
 import 'cesium/Build/Cesium/Widgets/widgets.css'
 import { resolveSceneDataProvider } from './dataProvider'
 import { pickPointOnScene } from './pick'
+import { subscribeTileLoadProgress, type TileLoadProgressSnapshot } from './tileLoadProgress'
 import {
   applyTilesetQuality,
   resolveTileMaxDetailDistanceM,
@@ -49,6 +50,12 @@ export interface CesiumViewerProps {
    * (ADR-019/ADR-020) e restano immuni.
    */
   tileQuality: TileQualityLevel
+  /**
+   * T-068: snapshot del caricamento dei tile del tileset di sessione, per
+   * l'indicatore in barra comandi. La % è una STIMA (CesiumJS non espone il
+   * totale dei tile; il conteggio pendente è esatto) — ADR-021.
+   */
+  onTileLoadProgress?: (snapshot: TileLoadProgressSnapshot) => void
   onScenePick: (point: GeoPoint) => void
   /** Chiamato dopo la creazione del Viewer (anche nel remount di StrictMode). */
   onViewerReady?: (viewer: Viewer) => void
@@ -165,6 +172,7 @@ export default function CesiumViewer({
   time,
   occlusionPoint,
   tileQuality,
+  onTileLoadProgress,
   onScenePick,
   onViewerReady,
 }: CesiumViewerProps) {
@@ -184,6 +192,32 @@ export default function CesiumViewer({
   // caricamento non è completo e dopo l'unmount): l'effetto del cambio
   // livello lo usa per mutare le proprietà senza ricreare il tileset.
   const attachedTilesetRef = useRef<Cesium3DTileset | null>(null)
+  // T-068: callback dell'indicatore di caricamento, letto a ogni evento senza
+  // far dipendere la sottoscrizione dalla sua identità (pattern onScenePick);
+  // removeTileLoadProgressRef stacca il listener al cleanup e prima di un
+  // nuovo attach sulla stessa istanza di sessione.
+  const onTileLoadProgressRef = useRef(onTileLoadProgress)
+  onTileLoadProgressRef.current = onTileLoadProgress
+  const removeTileLoadProgressRef = useRef<(() => void) | null>(null)
+  const lastReportedTileLoadRef = useRef<{ percent: number; busy: boolean } | null>(null)
+
+  // T-068: aggancia l'indicatore di caricamento al tileset di sessione al
+  // attach (entrambi i rami provider). Rimuove l'eventuale listener di un
+  // attach precedente (istanza riusata senza nuova create) e propaga alla UI
+  // solo i cambi visibili (percent/busy): il conteggio pendente può cambiare
+  // a ogni evento `loadProgress` e l'App non deve re-renderizzarli tutti.
+  const attachTileLoadProgress = (tileset: Cesium3DTileset): void => {
+    removeTileLoadProgressRef.current?.()
+    lastReportedTileLoadRef.current = null
+    removeTileLoadProgressRef.current = subscribeTileLoadProgress(tileset, (snapshot) => {
+      const last = lastReportedTileLoadRef.current
+      if (last !== null && last.percent === snapshot.percent && last.busy === snapshot.busy) {
+        return
+      }
+      lastReportedTileLoadRef.current = { percent: snapshot.percent, busy: snapshot.busy }
+      onTileLoadProgressRef.current?.(snapshot)
+    })
+  }
   // Stato di rendering della Luna: ricalcolato solo quando cambiano Observer o
   // tempo; i CallbackProperty dell'entità lo leggono a ogni frame (aggiornamento
   // fluido, senza ricreare l'entità).
@@ -402,6 +436,8 @@ export default function CesiumViewer({
             // e su remount l'istanza è riusata senza nuova create.
             applyTilesetQuality(tileset, tileQualityRef.current)
             installDevTilesetMeasurement(tileset)
+            // T-068: indicatore % caricamento sul tileset appena attaccato.
+            attachTileLoadProgress(tileset)
           })
           .catch((error: unknown) => {
             if (disposed) {
@@ -456,6 +492,8 @@ export default function CesiumViewer({
           // e su remount l'istanza è riusata senza nuova create.
           applyTilesetQuality(tileset, tileQualityRef.current)
           installDevTilesetMeasurement(tileset)
+          // T-068: indicatore % caricamento sul tileset appena attaccato.
+          attachTileLoadProgress(tileset)
         })
         .catch((error: unknown) => {
           if (disposed) {
@@ -469,6 +507,10 @@ export default function CesiumViewer({
 
     return () => {
       disposed = true
+      // T-068: il tileset di sessione sopravvive al remount, il listener
+      // dell'indicatore no: si stacca con questo componente.
+      removeTileLoadProgressRef.current?.()
+      removeTileLoadProgressRef.current = null
       if (attachedTileset !== null) {
         // destroyPrimitives: false sull'holder → rimozione SENZA destroy:
         // l'istanza di sessione resta riusabile da un remount. L'istanza era

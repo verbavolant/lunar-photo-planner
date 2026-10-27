@@ -3,6 +3,7 @@ import type { Viewer } from 'cesium'
 import CesiumViewer from './cesium/CesiumViewer'
 import CameraPovCard from './cesium/CameraPovCard'
 import { createTerrainHeightSampler } from './cesium/terrainSample'
+import type { TileLoadProgressSnapshot } from './cesium/tileLoadProgress'
 import { resolveTileQuality, type TileQualityLevel } from './cesium/tilesetPerformance'
 import { flyToObserverView, flyToOverhead, moveCameraWithObserver } from './cesium/camera'
 import { moonTopocentric } from './astronomy/moon'
@@ -93,6 +94,14 @@ const OCCLUSION_DEBOUNCE_MS = 500
 
 const DEV_STATUS_STYLE = {
   marginLeft: 'auto',
+  whiteSpace: 'nowrap' as const,
+  color: '#9aa3b5',
+}
+
+// Indicatore «Caricamento tiles: N%» (T-068) accanto al selettore qualità:
+// compare solo mentre i tile stanno arrivando, stessa tinta attenuata dello
+// stato di sviluppo.
+const TILE_LOAD_STYLE = {
   whiteSpace: 'nowrap' as const,
   color: '#9aa3b5',
 }
@@ -366,6 +375,10 @@ export default function App() {
       new URLSearchParams(window.location.search).get('tileQuality') ?? undefined,
     ).level,
   )
+  // T-068: snapshot del caricamento dei tile del tileset di sessione (la % è
+  // una stima, il conteggio pendente è esatto — ADR-021). null = nessun
+  // evento ancora ricevuto: l'indicatore compare solo mentre c'è attività.
+  const [tileLoad, setTileLoad] = useState<TileLoadProgressSnapshot | null>(null)
   const [baseDateMs, setBaseDateMs] = useState<number>(() => Date.now())
   const [sliderOffsetMin, setSliderOffsetMin] = useState(0)
   const [alignmentWindowOpen, setAlignmentWindowOpen] = useState(false)
@@ -901,6 +914,14 @@ export default function App() {
             <option value="eco">Eco (default)</option>
           </select>
         </label>
+        {tileLoad !== null && (tileLoad.busy || tileLoad.percent < 100) && (
+          <span
+            style={TILE_LOAD_STYLE}
+            title="Avanzamento del caricamento dei tile 3D. Percentuale stimata: Cesium non espone il totale dei tile da caricare (dettagli: manuale §9)."
+          >
+            Caricamento tiles: {tileLoad.percent}%
+          </span>
+        )}
         <button
           onClick={openManualeWindow}
           style={BUTTON_STYLE}
@@ -1347,6 +1368,7 @@ export default function App() {
                 : null
             }
             tileQuality={tileQuality}
+            onTileLoadProgress={setTileLoad}
             onScenePick={handleScenePick}
             onViewerReady={(viewer) => {
               viewerRef.current = viewer
