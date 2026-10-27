@@ -337,6 +337,8 @@ Esiti possibili:
 
 Se il campionamento non è possibile (scena non ancora pronta, contesto grafico senza depth texture, scena chiusa) la riga è sostituita dalla nota `Occlusione: <motivo>`.
 
+A ogni spostamento di Observer o Target la verifica riparte dopo un breve ritardo di assestamento: in quell'intervallo la riga mostra `Occlusione: calcolo in corso…` invece dell'esito precedente, per non confonderlo con il risultato aggiornato.
+
 Com'è fatto il calcolo, e cosa **non** è:
 
 - **Non è ray casting.** In CesiumJS 1.146 l'API di ray casting non esiste (verifica documentata in fase di sviluppo): la valutazione campiona la superficie lungo la linea con lo stesso metodo del Reverse Planner — quote alla **massima risoluzione disponibile** dei 3D Tiles, indipendenti dall'eventuale livello di qualità di rendering scelto.

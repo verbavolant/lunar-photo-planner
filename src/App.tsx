@@ -421,11 +421,13 @@ export default function App() {
   // Chiave del candidato adottato (data + distanza): riga in grassetto (T-053).
   const [adoptedReverseKey, setAdoptedReverseKey] = useState<string | null>(null)
   // Occlusione della linea di vista (T-064): report dell'ultima analisi o nota
-  // d'errore (pattern reverseNote). Il report precedente resta a schermo
-  // finché il nuovo non arriva (niente sfarfallio a ogni passo ±); viene
-  // scartato solo a punti nulli, coincidenti o in errore.
+  // d'errore (pattern reverseNote). Mentre la nuova analisi è in corso la riga
+  // mostra «calcolo in corso» al posto del report precedente, che sembrava un
+  // risultato vecchio (T-069, richiesta umano); il report/note resta l'ultimo
+  // valido e viene scartato solo a punti nulli, coincidenti o in errore.
   const [occlusionReport, setOcclusionReport] = useState<SightLineReport | null>(null)
   const [occlusionNote, setOcclusionNote] = useState<string | null>(null)
+  const [occlusionBusy, setOcclusionBusy] = useState(false)
   const effectiveDate = new Date(effectiveTimeMs(baseDateMs, sliderOffsetMin))
   // Fase lunare all'orario in uso (geocentrica, standard): blocco a destra
   // della riga slider nella barra Tempo, % C/D nei risultati allineamenti.
@@ -764,12 +766,14 @@ export default function App() {
     if (observer === null || target === null) {
       setOcclusionReport(null)
       setOcclusionNote(null)
+      setOcclusionBusy(false)
       return undefined
     }
     const analysisViewer = viewerRef.current
     if (analysisViewer === null || analysisViewer.isDestroyed()) {
       setOcclusionReport(null)
       setOcclusionNote('La scena 3D non è pronta: attendi il caricamento e riprova.')
+      setOcclusionBusy(false)
       return undefined
     }
     // Punti coincidenti: corda di lunghezza nulla, linea di vista indefinita.
@@ -780,8 +784,15 @@ export default function App() {
     } catch {
       setOcclusionReport(null)
       setOcclusionNote('Linea di vista indefinita: Observer e Target coincidono.')
+      setOcclusionBusy(false)
       return undefined
     }
+    // Analisi in arrivo (già durante il debounce): la riga passa subito a
+    // «calcolo in corso» per non lasciare a schermo un esito ormai vecchio
+    // (T-069). Il flag torna falso quando arriva il nuovo esito o una guardia
+    // lo disattiva; il cleanup non lo tocca perché ogni ri-esecuzione lo
+    // risetta prima del render.
+    setOcclusionBusy(true)
     let cancelled = false
     const debounceTimer = window.setTimeout(() => {
       void analyzeSightLine(observer, target, createTerrainHeightSampler(analysisViewer))
@@ -789,6 +800,7 @@ export default function App() {
           if (!cancelled) {
             setOcclusionReport(report)
             setOcclusionNote(null)
+            setOcclusionBusy(false)
           }
         })
         .catch((error: unknown) => {
@@ -799,6 +811,7 @@ export default function App() {
                 ? error.message
                 : 'Campionamento del terreno non riuscito (dettagli in console).',
             )
+            setOcclusionBusy(false)
             console.error('Analisi occlusione linea di vista fallita:', error)
           }
         })
@@ -1070,12 +1083,15 @@ export default function App() {
                     {row.label}: <strong>{row.value}</strong>
                   </div>
                 ))}
-              {observer !== null && target !== null && occlusionReport !== null && (
+              {observer !== null && target !== null && occlusionBusy && (
+                <div style={ROW_STYLE}>Occlusione: calcolo in corso…</div>
+              )}
+              {observer !== null && target !== null && !occlusionBusy && occlusionReport !== null && (
                 <div style={ROW_STYLE}>
                   Occlusione: <strong>{describeOcclusion(occlusionReport)}</strong>
                 </div>
               )}
-              {observer !== null && target !== null && occlusionNote !== null && (
+              {observer !== null && target !== null && !occlusionBusy && occlusionNote !== null && (
                 <div style={ROW_STYLE}>Occlusione: {occlusionNote}</div>
               )}
               {observer === null && target !== null && (
