@@ -294,7 +294,7 @@ Al primo avvio della ricerca il terreno attorno al Target viene **campionato** (
 
 Messaggi espliciti nella finestra:
 
-- `Terreno non campionabile: nessuna quota disponibile (tile non caricati o fuori copertura). Avvicinati al Target e riprova.` — nessun tile campionabile attorno al Target: zooma vicino al Target e riprova.
+- `Terreno non campionabile: nessuna quota disponibile attorno al Target (zona non coperta dalla mesh 3D o scaricamento fallito).` — nessuna cella della griglia ha quota: la zona non è coperta dalla mesh fotorealistica (l'app scarica da sola i tile necessari: riprovare non cambia l'esito).
 - `Copertura terreno parziale: N celle campionate su M; le distanze senza quota sono escluse.` — alcune posizioni sono senza quota (fuori copertura dei 3D Tiles): i risultati restano validi per le distanze campionate.
 - `Ricerca Reverse Planner fallita: …` — errore del campionamento (scena non pronta, contesto grafico senza supporto al sampling): leggi la causa e riprova.
 - `Nessun candidato nella finestra cercata.` — nessun posto/orario soddisfa la tolleranza nella finestra.
@@ -333,17 +333,17 @@ Esiti possibili:
 |---|---|
 | `vista libera` | nessun punto campionato scavalca la linea |
 | `occlusa a ~X dal Target (margine Y)` | la superficie blocca la vista: X è la distanza approssimativa del punto bloccante dal Target — segnato in scena con un **marker rosso** — e Y è di quanto la superficie sporge sopra la linea (negativo: la linea passa sotto) |
-| `non determinabile (N/M punti senza dati)` | N punti su M non hanno quota (tile 3D non ancora caricati in quelle zone): senza dati non si dichiara mai «libera» — avvicinati alla zona, attendi il caricamento e riprova |
+| `non determinabile (N/M punti senza dati)` | N punti su M non hanno quota: la mesh 3D non copre quelle zone (specchi d'acqua, aree senza dati) o gli scaricamenti sono falliti (rete/quota). L'app scarica da sola i tile necessari lungo la linea prima di concludere l'analisi: se l'esito resta «non determinabile», la zona non è coperta e riprovare non cambia nulla |
 
 Se il campionamento non è possibile (scena non ancora pronta, contesto grafico senza depth texture, scena chiusa) la riga è sostituita dalla nota `Occlusione: <motivo>`.
 
-A ogni spostamento di Observer o Target la verifica riparte dopo un breve ritardo di assestamento: in quell'intervallo la riga mostra `Occlusione: calcolo in corso…` invece dell'esito precedente, per non confonderlo con il risultato aggiornato.
+A ogni spostamento di Observer o Target la verifica riparte dopo un breve ritardo di assestamento: in quell'intervallo la riga mostra `Occlusione: scarico i tile della linea di vista…` invece dell'esito precedente — l'analisi include lo scarico dei tile mancanti lungo la linea (massimo dettaglio, anche di zone mai visualizzate) — per non confonderlo con il risultato aggiornato.
 
 Com'è fatto il calcolo, e cosa **non** è:
 
 - **Non è ray casting.** In CesiumJS 1.146 l'API di ray casting non esiste (verifica documentata in fase di sviluppo): la valutazione campiona la superficie lungo la linea con lo stesso metodo del Reverse Planner — quote alla **massima risoluzione disponibile** dei 3D Tiles, indipendenti dall'eventuale livello di qualità di rendering scelto.
 - **Campionamento discreto:** 256 punti interni alla linea (~4 m di passo su 1 km di distanza, ~195 m su 50 km). Un ostacolo più sottile del passo (pali, cavi, uno spigolo marginale) può sfuggire fra due campioni; il margine Y è quello del punto campionato più sfavorevole.
-- **Serve la scena caricata:** le zone mai visualizzate o non ancora scaricate non hanno quota → esito `non determinabile`, mai un falso «libera».
+- **Scarico dei tile incluso:** l'analisi forza lo scarico dei tile al massimo dettaglio lungo la linea, anche di zone mai visualizzate, prima di concludere; se un punto resta senza quota è perché la mesh non copre quella zona (o lo scarico è fallito) → esito `non determinabile`, mai un falso «libera».
 - **Le quote sono ellissoideali** (vedi [§12](#12-limitazioni-dichiarate-e-precisione)): margini di pochi metri vanno presi come indicativi.
 - L'analisi riparte (con un breve ritardo di assestamento) a ogni spostamento di Observer o Target e **non dipende da data/ora**: la linea di vista non cambia con il tempo, cambia solo la Luna sopra di essa.
 
@@ -558,7 +558,7 @@ Sono i limiti **noti e voluti** dell'attuale release, non bug da segnalare:
 | Quote | `Quota (ellissoide)` è l'altezza sopra l'**ellissoide WGS84**, **non** l'altezza sul livello del mare: lo scarto geoide–ellissoide non è corretto (in Italia può valere decine di metri). Per lavorare usa `Altezza dal suolo`. |
 | Altitudine della Luna | Calcolata **senza rifrazione atmosferica**. Verso l'orizzonte la Luna reale appare **più alta** di quanto mostrato (frazioni di grado, dello stesso ordine del diametro lunare): sopra i ~10° l'effetto è trascurabile, vicino all'orizzonte usa il valore come guida e verifica sul posto. |
 | Posizione della Luna | **Topocentrica** per l'Osservatore scelto (parallasse corretta): azimut, altitudine, distanza e diametro sono i valori reali per quel punto, verificati contro effemeridi autorevoli. |
-| Ostacoli | L'occlusione è valutata **campionando** la superficie 3D in 256 punti lungo la linea di vista ([§6.9](#69-occlusione-della-linea-di-vista)), non con ray casting: ostacoli più sottili del passo di campionamento o marginali possono sfuggire; zone senza tile caricati danno «non determinabile», mai «libera». Conta solo ciò che è effettivamente modellato nella mesh. |
+| Ostacoli | L'occlusione è valutata **campionando** la superficie 3D in 256 punti lungo la linea di vista ([§6.9](#69-occlusione-della-linea-di-vista)), non con ray casting: ostacoli più sottili del passo di campionamento o marginali possono sfuggire; zone non coperte dalla mesh 3D danno «non determinabile» (l'app scarica da sola i tile necessari lungo la linea), mai «libera». Conta solo ciò che è effettivamente modellato nella mesh. |
 | Suolo sotto l'Osservatore | `Altezza dal suolo` è riferita alla quota letta **al momento del clic** e non viene rimisurata quando ti sposti (i tile 3D non espongono un terreno campionabile): dopo grandi spostamenti, riposiziona l'Osservatore. |
 | Fase lunare | La frazione illuminata è **geocentrica** (definizione standard delle fasi); lo scarto topocentrico è sotto l'1%. Il **disco** disegnato è una rappresentazione equivalente (nessuna librazione, nessun dettaglio dei mari): contano i numeri. |
 | Fotocamera | Nessuna simulazione di sensore, focale, frustum o "Luna nel frame": [calcolo a mano, §7.3](#73-dal-numero-alla-focale). |

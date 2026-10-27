@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { Viewer } from 'cesium'
-import { createTerrainHeightSampler } from './terrainSample'
+import { createTerrainHeightSampler, SAMPLING_TIMEOUT_MS } from './terrainSample'
 import type { LatLonPoint } from '../planning/reverseAlignment'
 
 /** Chiamata registrata al fake di `Scene.sampleHeightMostDetailed`. */
@@ -17,6 +17,8 @@ function fakeViewer(options: {
   entities?: readonly object[]
   /** Quota restituita per indice: `undefined` = posizione non campionabile. */
   heightsByIndex: ReadonlyArray<number | undefined>
+  /** Mai risolta: simula il preload bloccato da un tile fallito (T-070). */
+  neverResolves?: boolean
   calls?: SampleHeightCall[]
 }): Viewer {
   const scene = {
@@ -30,6 +32,9 @@ function fakeViewer(options: {
         latitudesRad: positions.map((position) => position.latitude),
         objectsToExclude,
       })
+      if (options.neverResolves === true) {
+        return new Promise(() => {})
+      }
       // Come Cesium: modifica in place e risolve alla stessa lista; le
       // posizioni senza geometria campionabile diventano undefined.
       return Promise.resolve(
@@ -117,5 +122,23 @@ describe('createTerrainHeightSampler', () => {
     await expect(
       sampler([{ latitudeDeg: 45.5, longitudeDeg: 10.2 }]),
     ).rejects.toThrow(/scena 3D è stata chiusa/i)
+  })
+
+  it('campionamento mai concluso: errore esplicito al timeout, mai attesa infinita', async () => {
+    // Un tile fallito lascia il preload «most detailed» mai ready (T-070):
+    // la guardia deve trasformare l'attesa infinita in errore esplicito.
+    vi.useFakeTimers()
+    try {
+      const sampler = createTerrainHeightSampler(
+        fakeViewer({ heightsByIndex: [100], neverResolves: true }),
+      )
+      const pending = sampler([{ latitudeDeg: 45.5, longitudeDeg: 10.2 }])
+      // Handler di rejection attaccato PRIMA di far scorrere i timer.
+      const assertion = expect(pending).rejects.toThrow(/non concluso entro 60 s/i)
+      await vi.advanceTimersByTimeAsync(SAMPLING_TIMEOUT_MS)
+      await assertion
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

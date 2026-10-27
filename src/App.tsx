@@ -723,7 +723,7 @@ export default function App() {
       )
       if (sampledCells === 0) {
         setReverseNote(
-          'Terreno non campionabile: nessuna quota disponibile (tile non caricati o fuori copertura). Avvicinati al Target e riprova.',
+          'Terreno non campionabile: nessuna quota disponibile attorno al Target (zona non coperta dalla mesh 3D o scaricamento fallito).',
         )
         return
       }
@@ -802,8 +802,10 @@ export default function App() {
       return undefined
     }
     // Analisi in arrivo (già durante il debounce): la riga passa subito a
-    // «calcolo in corso» per non lasciare a schermo un esito ormai vecchio
-    // (T-069). Il flag torna falso quando arriva il nuovo esito o una guardia
+    // «scarico i tile della linea di vista» per non lasciare a schermo un
+    // esito ormai vecchio (T-069; testo T-070: l'analisi include lo scarico
+    // dei tile mancanti lungo la linea). Il flag torna falso quando arriva
+    // il nuovo esito o una guardia
     // lo disattiva; il cleanup non lo tocca perché ogni ri-esecuzione lo
     // risetta prima del render.
     setOcclusionBusy(true)
@@ -1098,7 +1100,7 @@ export default function App() {
                   </div>
                 ))}
               {observer !== null && target !== null && occlusionBusy && (
-                <div style={ROW_STYLE}>Occlusione: calcolo in corso…</div>
+                <div style={ROW_STYLE}>Occlusione: scarico i tile della linea di vista…</div>
               )}
               {observer !== null && target !== null && !occlusionBusy && occlusionReport !== null && (
                 <div style={ROW_STYLE}>

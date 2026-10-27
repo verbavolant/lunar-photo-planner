@@ -15,15 +15,30 @@
  * esclude quelle distanze; mai quote simulate (regola del progetto).
  *
  * Non tocca né ricarica il tileset: il sampling forza solo il caricamento dei
- * tile di copertura dei punti richiesti, nella stessa sessione 3D Tiles già in
- * scena (vincolo «non ricaricare Google 3D Tiles quando cambia data/ora»: qui
- * la data/ora non è nemmeno coinvolta, le quote non dipendono dal tempo).
+ * tile di copertura dei punti richiesti (preload «most detailed» interno a
+ * Cesium), nella stessa sessione 3D Tiles già in scena (vincolo «non
+ * ricaricare Google 3D Tiles quando cambia data/ora»: qui la data/ora non è
+ * nemmeno coinvolta, le quote non dipendono dal tempo). T-070: il preload gira
+ * solo se il tileset è figlio DIRETTO di scene.primitives (gate
+ * `scene.primitives.contains`, verificato sul sorgente Cesium 1.146 —
+ * ADR-022); vedi CesiumViewer.tsx.
  *
  * Il batching a ≤ 512 punti per chiamata è fatto da `buildTerrainPolarGrid`
  * (`TERRAIN_GRID_BATCH_SIZE`: scelta di orchestrazione, NON un limite Cesium).
  */
 import { Cartographic, type Viewer } from 'cesium'
 import type { TerrainHeightSampler } from '../planning/reverseAlignment'
+
+/**
+ * Tempo massimo di attesa del campionamento, scarico dei tile incluso. Col
+ * preload «most detailed» attivo (T-070) un tile che FALLISCE (es. 429 di
+ * quota) lascia il pass di preload mai «ready»: `contentAvailable` è falso sui
+ * tile FAILED e non vengono ritentati (sorgente Cesium 1.146, Cesium3DTile
+ * L191688 e MostDetailedTraversal.selectTiles L193749) → la promessa di
+ * `sampleHeightMostDetailed` non si risolverebbe mai. La guardia trasforma
+ * l'attesa infinita in errore esplicito (mai «in corso» appeso a vivere).
+ */
+export const SAMPLING_TIMEOUT_MS = 60_000
 
 /**
  * Crea un sampler che campiona le quote ellissoideali del suolo sulla scena
@@ -59,11 +74,38 @@ export function createTerrainHeightSampler(viewer: Viewer): TerrainHeightSampler
           (point.latitudeDeg * Math.PI) / 180,
         ),
     )
-    const sampled = await scene.sampleHeightMostDetailed(positions, [
+    const sampling = scene.sampleHeightMostDetailed(positions, [
       ...viewer.entities.values,
     ])
-    return sampled.map((position) =>
-      position === undefined || position.height === undefined ? null : position.height,
-    )
+    // Guardia di timeout (SAMPLING_TIMEOUT_MS): trasforma un preload bloccato
+    // (tile fallito mai ritentato) in errore esplicito. `globalThis.setTimeout`
+    // e non `window.setTimeout`: i test girano in ambiente node.
+    let timeoutHandle: ReturnType<typeof setTimeout> | undefined
+    try {
+      const sampled = await Promise.race([
+        sampling,
+        new Promise<never>((_, reject) => {
+          timeoutHandle = setTimeout(() => {
+            reject(
+              new Error(
+                `Campionamento del terreno non concluso entro ${Math.round(SAMPLING_TIMEOUT_MS / 1000)} s: scarico dei tile bloccato (rete o quota). Riprova.`,
+              ),
+            )
+          }, SAMPLING_TIMEOUT_MS)
+        }),
+      ])
+      return sampled.map((position) =>
+        position === undefined || position.height === undefined
+          ? null
+          : position.height,
+      )
+    } finally {
+      if (timeoutHandle !== undefined) {
+        clearTimeout(timeoutHandle)
+      }
+      // Se il timeout ha vinto la corsa, la promessa del sampling può
+      // concludere dopo: senza questo catch sarebbe un unhandled rejection.
+      sampling.catch(() => undefined)
+    }
   }
 }

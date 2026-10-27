@@ -18,11 +18,13 @@
 // - Errori non 429: un solo tentativo, avviso a schermo (fallback esistente:
 //   globo nudo navigabile + notice).
 // - Un'istanza Cesium3DTileset può stare in una sola scena: al remount la
-//   componente la rimuove dalla scena vecchia tramite una PrimitiveCollection
-//   dedicata con destroyPrimitives: false (pattern ufficiale Cesium.d.ts
-//   1.146 L44887–L44917) e lo segnala qui; se il tileset ERA attaccato a una
-//   scena il cui contesto WebGL sta per essere distrutto, le risorse GPU non
-//   sono più valide e la acquire successiva ne ricrea uno.
+//   componente la rimuove dalla scena vecchia con
+//   scene.primitives.destroyPrimitives = false (T-070: il tileset sta
+//   DIRETTAMENTE in scene.primitives, senza holder annidato — il preload
+//   «most detailed» di sampleHeightMostDetailed richiede un figlio diretto,
+//   ADR-022) e lo segnala qui; se il tileset ERA attaccato a una scena il cui
+//   contesto WebGL sta per essere distrutto, le risorse GPU non sono più
+//   valide e la acquire successiva ne ricrea uno.
 // - Contatore console delle creazioni per sessione (debug, richiesta umano).
 //
 // Nei test NON tocca la rete (punto 4 della richiesta): la funzione di

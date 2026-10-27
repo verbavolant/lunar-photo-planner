@@ -9,7 +9,6 @@ import {
   Color,
   Ion,
   JulianDate,
-  PrimitiveCollection,
   ScreenSpaceEventHandler,
   ScreenSpaceEventType,
   Viewer,
@@ -314,6 +313,14 @@ export default function CesiumViewer({
       selectionIndicator: false,
     })
 
+    // T-070: niente destroy automatico dei primitive alla rimozione — il tileset
+    // di sessione (T-040) va staccato dalla scena in chiusura SENZA distruggerlo,
+    // così un remount lo riusa senza rifare la root request (ADR-016). Prima lo
+    // garantiva un holder PrimitiveCollection({ destroyPrimitives: false }),
+    // rimosso perché il preload «most detailed» di sampleHeightMostDetailed
+    // richiede che il tileset sia figlio DIRETTO di scene.primitives (vedi sotto).
+    viewer.scene.primitives.destroyPrimitives = false
+
     viewerRef.current = viewer
     onViewerReady?.(viewer)
 
@@ -377,13 +384,18 @@ export default function CesiumViewer({
     // T-040: UN tileset per sessione per provider. La Promise di creazione è
     // memoizzata in tilesetSession.ts (store su globalThis, sopravvive a
     // StrictMode/HMR): le chiamate concorrenti riusano la stessa creazione e
-    // i 429 seguono un backoff esponenziale con avviso a schermo. L'holder
-    // con destroyPrimitives: false (pattern ufficiale Cesium.d.ts 1.146
-    // L44887–L44917) permette di rimuovere l'istanza condivisa dallo scene
-    // che sta per essere distrutto SENZA distruggerla, così un remount la
-    // riusa invece di rifare la root request.
-    const tilesetHolder = new PrimitiveCollection({ destroyPrimitives: false })
-    viewer.scene.primitives.add(tilesetHolder)
+    // i 429 seguono un backoff esponenziale con avviso a schermo. La rimozione
+    // senza destroy al remount è garantita da `destroyPrimitives = false`
+    // sulla collection della scena (sopra).
+    // T-070: il tileset va attaccato DIRETTAMENTE a scene.primitives, NON in
+    // un holder annidato: il preload «most detailed» di
+    // Scene.sampleHeightMostDetailed — che scarica e attende i tile al max LOD
+    // lungo ogni punto campionato — è condizionato da
+    // `scene.primitives.contains(tileset)`, vero solo per i figli diretti
+    // (sorgente Cesium 1.146: updateMostDetailedRayPick + PrimitiveCollection
+    // .add/contains, registro _composites per guid). Con l'holder il preload
+    // non partiva mai: le zone mai visualizzate restavano senza quota
+    // («non determinabile») invece di essere scaricate.
     let attachedTileset: Cesium3DTileset | null = null
     const sessionKey = sceneProvider.provider
     const sessionLabel =
@@ -425,7 +437,7 @@ export default function CesiumViewer({
               // un remount (StrictMode/HMR) può riusarla.
               return
             }
-            tilesetHolder.add(tileset)
+            viewer.scene.primitives.add(tileset)
             // Sample ufficiale Google: la superficie fotorealistica sostituisce
             // l'ellissoide di base.
             viewer.scene.globe.show = false
@@ -483,7 +495,7 @@ export default function CesiumViewer({
             // remount (StrictMode/HMR) può riusarla.
             return
           }
-          tilesetHolder.add(tileset)
+          viewer.scene.primitives.add(tileset)
           viewer.scene.globe.show = false
           attachedTileset = tileset
           attachedTilesetRef.current = tileset
@@ -512,12 +524,12 @@ export default function CesiumViewer({
       removeTileLoadProgressRef.current?.()
       removeTileLoadProgressRef.current = null
       if (attachedTileset !== null) {
-        // destroyPrimitives: false sull'holder → rimozione SENZA destroy:
-        // l'istanza di sessione resta riusabile da un remount. L'istanza era
-        // attaccata (e quindi renderizzata) alla scena di QUESTO viewer, il
-        // cui contesto WebGL muore qui sotto: il modulo di sessione segna il
-        // tileset da ricreare alla prossima acquire.
-        tilesetHolder.remove(attachedTileset)
+        // destroyPrimitives: false sulla collection della scena → rimozione
+        // SENZA destroy: l'istanza di sessione resta riusabile da un remount.
+        // L'istanza era attaccata (e quindi renderizzata) alla scena di QUESTO
+        // viewer, il cui contesto WebGL muore qui sotto: il modulo di sessione
+        // segna il tileset da ricreare alla prossima acquire.
+        viewer.scene.primitives.remove(attachedTileset)
         markSessionTilesetDetached({ sessionKey, tileset: attachedTileset })
       }
       clickHandler.destroy()
