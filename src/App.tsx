@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Viewer } from 'cesium'
 import CesiumViewer from './cesium/CesiumViewer'
 import CameraPovCard from './cesium/CameraPovCard'
@@ -30,7 +30,12 @@ import {
   type ReverseAlignmentCandidate,
   type ReverseAlignmentSearchResult,
 } from './planning/reverseAlignment'
-import { formatAngleDeg, formatDistanceM } from './planning/format'
+import { analyzeSightLine, type SightLineReport } from './planning/occlusion'
+import {
+  formatAngleDeg,
+  formatDistanceM,
+  formatHeightDifferenceM,
+} from './planning/format'
 import { loadSavedHome, saveHome, type SavedHome } from './planning/homeStorage'
 import {
   browserTimeZone,
@@ -72,12 +77,18 @@ const TOOLBAR_STYLE = {
 // l'ID dell'ultimo task completato nel piano (docs/ai/TASKS.md), così l'umano
 // vede sul live fino a dove è arrivato lo sviluppo. Aggiornare la costante a
 // ogni task chiuso.
-const DEVELOPMENT_STATUS = 'T-061'
+const DEVELOPMENT_STATUS = 'T-064'
 
 // Distanza massima Observer↔Target esplorata dal Reverse Planner (T-060), in
 // metri: default 2 km (scala urbana, copertura dei Google 3D Tiles), editabile
 // 100–20.000 nella finestra di ricerca.
 const DEFAULT_REVERSE_MAX_DISTANCE_M = 2000
+
+// Debounce (ms) dell'analisi d'occlusione (T-064): i pick e i passi ±
+// dell'Osservatore possono arrivare in raffica; l'analisi campiona il suolo
+// solo quando la modifica si assesta. Le quote non dipendono dal tempo:
+// l'effetto non ascolta data/ora.
+const OCCLUSION_DEBOUNCE_MS = 500
 
 const DEV_STATUS_STYLE = {
   marginLeft: 'auto',
@@ -272,6 +283,18 @@ function describeAlignmentOffsets(offsets: AlignmentOffsets): string {
   return `${horizontal} · ${vertical}`
 }
 
+/** Riga «Occlusione» del box Dati (T-064) dal report dell'analisi. */
+function describeOcclusion(report: SightLineReport): string {
+  if (report.status === 'free') {
+    return 'vista libera'
+  }
+  const restrictive = report.mostRestrictive
+  if (report.status === 'occluded' && restrictive !== null) {
+    return `occlusa a ~${formatDistanceM(restrictive.distanceFromTargetM)} dal Target (margine ${formatHeightDifferenceM(restrictive.clearanceM)})`
+  }
+  return `non determinabile (${report.unsampledCount}/${report.sampleCount} punti senza dati)`
+}
+
 /** Limita un intero dal campo numerico (fallback al default se non leggibile). */
 function clampInt(value: string, min: number, max: number, fallback: number): number {
   const parsed = Number.parseInt(value, 10)
@@ -372,6 +395,12 @@ export default function App() {
   const [reverseBusy, setReverseBusy] = useState(false)
   // Chiave del candidato adottato (data + distanza): riga in grassetto (T-053).
   const [adoptedReverseKey, setAdoptedReverseKey] = useState<string | null>(null)
+  // Occlusione della linea di vista (T-064): report dell'ultima analisi o nota
+  // d'errore (pattern reverseNote). Il report precedente resta a schermo
+  // finché il nuovo non arriva (niente sfarfallio a ogni passo ±); viene
+  // scartato solo a punti nulli, coincidenti o in errore.
+  const [occlusionReport, setOcclusionReport] = useState<SightLineReport | null>(null)
+  const [occlusionNote, setOcclusionNote] = useState<string | null>(null)
   const effectiveDate = new Date(effectiveTimeMs(baseDateMs, sliderOffsetMin))
   // Fase lunare all'orario in uso (geocentrica, standard): blocco a destra
   // della riga slider nella barra Tempo, % C/D nei risultati allineamenti.
@@ -700,6 +729,61 @@ export default function App() {
     setAdoptedReverseKey(reverseCandidateKey(candidate))
   }
 
+  // Occlusione della linea di vista (T-064): con Observer e Target posati
+  // campiona il suolo lungo la corda con il sampler ADR-019 (quote alla
+  // massima risoluzione dei 3D Tiles in scena). Le quote non dipendono dal
+  // tempo: l'effetto non ascolta data/ora (come il Reverse Planner). Debounce
+  // per coalescere le modifiche ravvicinate; `viewer` in dipendenze serve solo
+  // a riarmare l'analisi quando la scena diventa pronta.
+  useEffect(() => {
+    if (observer === null || target === null) {
+      setOcclusionReport(null)
+      setOcclusionNote(null)
+      return undefined
+    }
+    const analysisViewer = viewerRef.current
+    if (analysisViewer === null || analysisViewer.isDestroyed()) {
+      setOcclusionReport(null)
+      setOcclusionNote('La scena 3D non è pronta: attendi il caricamento e riprova.')
+      return undefined
+    }
+    // Punti coincidenti: corda di lunghezza nulla, linea di vista indefinita.
+    // La condizione canonica è il throw di geodesy (stessa segnalazione delle
+    // misure e della ricerca): riusarlo evita di duplicare la soglia.
+    try {
+      lineOfSightAzimuthDeg(observer, target)
+    } catch {
+      setOcclusionReport(null)
+      setOcclusionNote('Linea di vista indefinita: Observer e Target coincidono.')
+      return undefined
+    }
+    let cancelled = false
+    const debounceTimer = window.setTimeout(() => {
+      void analyzeSightLine(observer, target, createTerrainHeightSampler(analysisViewer))
+        .then((report) => {
+          if (!cancelled) {
+            setOcclusionReport(report)
+            setOcclusionNote(null)
+          }
+        })
+        .catch((error: unknown) => {
+          if (!cancelled) {
+            setOcclusionReport(null)
+            setOcclusionNote(
+              error instanceof Error && error.message !== ''
+                ? error.message
+                : 'Campionamento del terreno non riuscito (dettagli in console).',
+            )
+            console.error('Analisi occlusione linea di vista fallita:', error)
+          }
+        })
+    }, OCCLUSION_DEBOUNCE_MS)
+    return () => {
+      cancelled = true
+      window.clearTimeout(debounceTimer)
+    }
+  }, [observer, target, viewer])
+
   function flyToObserverOverhead(): void {
     if (observer === null) {
       return
@@ -938,6 +1022,14 @@ export default function App() {
                     {row.label}: <strong>{row.value}</strong>
                   </div>
                 ))}
+              {observer !== null && target !== null && occlusionReport !== null && (
+                <div style={ROW_STYLE}>
+                  Occlusione: <strong>{describeOcclusion(occlusionReport)}</strong>
+                </div>
+              )}
+              {observer !== null && target !== null && occlusionNote !== null && (
+                <div style={ROW_STYLE}>Occlusione: {occlusionNote}</div>
+              )}
               {observer === null && target !== null && (
                 <div style={ROW_STYLE}>Posiziona l'Osservatore per i valori della Luna.</div>
               )}
@@ -1222,6 +1314,11 @@ export default function App() {
             observer={observer}
             target={target}
             time={effectiveDate}
+            occlusionPoint={
+              occlusionReport !== null && occlusionReport.status === 'occluded'
+                ? occlusionReport.mostRestrictive
+                : null
+            }
             onScenePick={handleScenePick}
             onViewerReady={(viewer) => {
               viewerRef.current = viewer

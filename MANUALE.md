@@ -37,13 +37,14 @@
 - posizione della Luna **topocentrica** — cioè calcolata per il punto in cui ti metterai tu, con la parallasse corretta;
 - misure reali tra te e il soggetto: distanze, azimut, dislivello, angolo verticale;
 - ricerca automatica dei prossimi istanti in cui la Luna passa sulla linea **Osservatore → Target**;
+- verifica se la linea di vista verso il soggetto è libera o occlusa (campionamento della superficie 3D, [§6.9](#69-occlusione-della-linea-di-vista));
 - fase lunare (frazione illuminata) all'orario che stai usando.
 
 **Cosa non (ancora) è:**
 
 - **non** simula la fotocamera: non ci sono sensore, focale, inquadratura o "Luna nel frame". Il calcolo dell'inquadratura va fatto a mano: [formula e esempio §7](#73-dal-numero-alla-focale).
-- **non** calcola l'occlusione: la linea verde tra te e il soggetto è geometrica, non dice se un edificio la interrompe. Va verificato a occhio ruotando la scena (il ray casting è previsto in una fase successiva).
-- **non** cerca lui il posto: la ricerca inversa (dati il soggetto, trova luogo + data + ora) è la Fase 7 e non è implementata.
+- **non** fa ray casting: l'occlusione della linea di vista è valutata campionando la superficie 3D in punti discreti lungo la linea verde ([§6.9](#69-occlusione-della-linea-di-vista)); ostacoli sottili rispetto al passo di campionamento possono sfuggire e il risultato va comunque confermato a occhio ruotando la scena.
+- **non** cerca per indirizzo né salva la pianificazione: la ricerca inversa esiste ([§6.8](#68-finestra-di-ricerca-cerca-luogo-per-il-target-reverse-planner)), ma non c'è ricerca per indirizzo né salvataggio/condivisione della pianificazione (unica eccezione: la Home dell'Osservatore, §6.1).
 
 ---
 
@@ -219,6 +220,12 @@ Compare appena posizioni almeno un punto. Senza Osservatore mostra solo il sugge
 
 Serve a verificare l'allineamento **all'orario corrente** senza aprire la ricerca: le righe si aggiornano con lo slider, i pulsanti `±1 min` e quando adotti un candidato. Se Observer e Target coincidono le righe non compaiono (linea di vista indefinita).
 
+**Blocco Occlusione** (serve **tutti e due** i punti):
+
+| Riga | Valore |
+|---|---|
+| `Occlusione` | esito della verifica della linea di vista sulla superficie 3D: `vista libera`, `occlusa a ~X dal Target (margine Y)` oppure `non determinabile (N/M punti senza dati)` — come si legge e con quali limiti: [§6.9](#69-occlusione-della-linea-di-vista) |
+
 I numeri sono formattati all'italiana (virgola decimale, punto per le migliaia). Se una riga mostra `—` il valore non è calcolabile in quel momento: vedi [§11](#11-messaggi-a-schermo-e-problemi-frequenti).
 
 ### 6.6 Finestra di ricerca "Cerca allineamenti Luna"
@@ -310,9 +317,31 @@ fase 96% C (crescente)
 
 **Cliccare una riga adotta il candidato**: l'**Observer** viene spostato sul punto indicato (quota = suolo campionato, quindi `Altezza dal suolo` = 0 m) e l'**orario** viene impostato (slider a 0). La riga adottata va in grassetto e la finestra resta aperta: puoi adottare un altro candidato o premere `Ricalcola` con parametri diversi.
 
-> Limiti dichiarati: solo la composizione «dietro/il Target» sul radiale (nessun offset laterale ampio); nessun controllo di occlusione (Fase 8); l'osservatore candidato è a terra, senza altezza occhi. La linea di vista e la Luna in scena dopo l'adozione usano i dati reali del punto adottato.
+> Limiti dichiarati: solo la composizione «dietro/il Target» sul radiale (nessun offset laterale ampio); nessun controllo di occlusione sui candidati (la verifica d'occlusione [§6.9](#69-occlusione-della-linea-di-vista) vale solo per l'Osservatore corrente); l'osservatore candidato è a terra, senza altezza occhi. La linea di vista e la Luna in scena dopo l'adozione usano i dati reali del punto adottato.
 
 ---
+
+### 6.9 Occlusione della linea di vista
+
+Con Observer e Target posati, il box Dati mostra la riga `Occlusione`: la **linea di vista** (il segmento retto in 3D, la linea verde in scena) viene confrontata con la superficie 3D campionandola in 256 punti interni. Per ogni punto si confronta la quota della linea con quella della superficie sottostante (la mesh fotorealistica: terreno **ed** edifici); se la superficie scavalca la linea, la vista è occlusa.
+
+Esiti possibili:
+
+| Valore | Significato |
+|---|---|
+| `vista libera` | nessun punto campionato scavalca la linea |
+| `occlusa a ~X dal Target (margine Y)` | la superficie blocca la vista: X è la distanza approssimativa del punto bloccante dal Target — segnato in scena con un **marker rosso** — e Y è di quanto la superficie sporge sopra la linea (negativo: la linea passa sotto) |
+| `non determinabile (N/M punti senza dati)` | N punti su M non hanno quota (tile 3D non ancora caricati in quelle zone): senza dati non si dichiara mai «libera» — avvicinati alla zona, attendi il caricamento e riprova |
+
+Se il campionamento non è possibile (scena non ancora pronta, contesto grafico senza depth texture, scena chiusa) la riga è sostituita dalla nota `Occlusione: <motivo>`.
+
+Com'è fatto il calcolo, e cosa **non** è:
+
+- **Non è ray casting.** In CesiumJS 1.146 l'API di ray casting non esiste (verifica documentata in fase di sviluppo): la valutazione campiona la superficie lungo la linea con lo stesso metodo del Reverse Planner — quote alla **massima risoluzione disponibile** dei 3D Tiles, indipendenti dall'eventuale livello di qualità di rendering scelto.
+- **Campionamento discreto:** 256 punti interni alla linea (~4 m di passo su 1 km di distanza, ~195 m su 50 km). Un ostacolo più sottile del passo (pali, cavi, uno spigolo marginale) può sfuggire fra due campioni; il margine Y è quello del punto campionato più sfavorevole.
+- **Serve la scena caricata:** le zone mai visualizzate o non ancora scaricate non hanno quota → esito `non determinabile`, mai un falso «libera».
+- **Le quote sono ellissoideali** (vedi [§12](#12-limitazioni-dichiarate-e-precisione)): margini di pochi metri vanno presi come indicativi.
+- L'analisi riparte (con un breve ritardo di assestamento) a ogni spostamento di Observer o Target e **non dipende da data/ora**: la linea di vista non cambia con il tempo, cambia solo la Luna sopra di essa.
 
 ## 7. Leggere i numeri (con esempi)
 
@@ -511,11 +540,11 @@ Sono i limiti **noti e voluti** dell'attuale release, non bug da segnalare:
 | Quote | `Quota (ellissoide)` è l'altezza sopra l'**ellissoide WGS84**, **non** l'altezza sul livello del mare: lo scarto geoide–ellissoide non è corretto (in Italia può valere decine di metri). Per lavorare usa `Altezza dal suolo`. |
 | Altitudine della Luna | Calcolata **senza rifrazione atmosferica**. Verso l'orizzonte la Luna reale appare **più alta** di quanto mostrato (frazioni di grado, dello stesso ordine del diametro lunare): sopra i ~10° l'effetto è trascurabile, vicino all'orizzonte usa il valore come guida e verifica sul posto. |
 | Posizione della Luna | **Topocentrica** per l'Osservatore scelto (parallasse corretta): azimut, altitudine, distanza e diametro sono i valori reali per quel punto, verificati contro effemeridi autorevoli. |
-| Ostacoli | L'**occlusione non è calcolata**: la linea verde è geometria pura. Alberi, edifici e rilievi vanno verificati ruotando la scena. |
+| Ostacoli | L'occlusione è valutata **campionando** la superficie 3D in 256 punti lungo la linea di vista ([§6.9](#69-occlusione-della-linea-di-vista)), non con ray casting: ostacoli più sottili del passo di campionamento o marginali possono sfuggire; zone senza tile caricati danno «non determinabile», mai «libera». Conta solo ciò che è effettivamente modellato nella mesh. |
 | Suolo sotto l'Osservatore | `Altezza dal suolo` è riferita alla quota letta **al momento del clic** e non viene rimisurata quando ti sposti (i tile 3D non espongono un terreno campionabile): dopo grandi spostamenti, riposiziona l'Osservatore. |
 | Fase lunare | La frazione illuminata è **geocentrica** (definizione standard delle fasi); lo scarto topocentrico è sotto l'1%. Il **disco** disegnato è una rappresentazione equivalente (nessuna librazione, nessun dettaglio dei mari): contano i numeri. |
 | Fotocamera | Nessuna simulazione di sensore, focale, frustum o "Luna nel frame": [calcolo a mano, §7.3](#73-dal-numero-alla-focale). |
-| Funzionalità non ancora presenti | Ricerca inversa (trova luogo + data + ora), ricerca per indirizzo, confronto di più candidati, salvataggio/condivisione della pianificazione (unica eccezione: la Home dell'Osservatore, §6.1), stime di esposizione. |
+| Funzionalità non ancora presenti | Ricerca per indirizzo, confronto di più candidati, salvataggio/condivisione della pianificazione (unica eccezione: la Home dell'Osservatore, §6.1), stime di esposizione. |
 | Tempo | Precisione **al minuto** sull'input e sulle etichette; la ricerca allineamenti campiona con il `Passo (min)` scelto e raffina gli attraversamenti, ma il risultato mostrato resta in ore:minuti. |
 | Fuso orario | Sempre quello del **browser**. Per pianificare all'estero, considera lo scostamento a mano. |
 | Dati 3D | La mesh fotorealistica arriva da Google (via Cesium ion o via Map Tiles API, a seconda della configurazione: [§9](#9-parametri-nellurl-provider-tilemaxm)) ed è disponibile solo per le aree coperte dal servizio; disponibilità e risoluzione dipendono dal provider, non dall'app. |

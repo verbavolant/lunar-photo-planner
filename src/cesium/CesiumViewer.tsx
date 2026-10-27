@@ -22,6 +22,7 @@ import { acquireSessionTileset, markSessionTilesetDetached } from './tilesetSess
 import { createMoonTexture, moonDiameterM, moonPositionEcef } from './moonRender'
 import { moonTopocentric, type MoonTopocentric } from '../astronomy/moon'
 import type { GeoPoint } from '../geodesy/geodesy'
+import type { RestrictivePoint } from '../planning/occlusion'
 import type { PlannerPointId } from '../planning/points'
 
 export interface CesiumViewerProps {
@@ -29,6 +30,12 @@ export interface CesiumViewerProps {
   target: GeoPoint | null
   /** Tempo effettivo della UI: guida la posizione apparente della Luna. */
   time: Date
+  /**
+   * Punto occludente dell'analisi d'occlusione (T-064): passato solo quando
+   * lo stato è `occluded`; `null` = nessun marker (vista libera, esito
+   * indecidibile o analisi assente).
+   */
+  occlusionPoint: RestrictivePoint | null
   onScenePick: (point: GeoPoint) => void
   /** Chiamato dopo la creazione del Viewer (anche nel remount di StrictMode). */
   onViewerReady?: (viewer: Viewer) => void
@@ -106,6 +113,7 @@ export default function CesiumViewer({
   observer,
   target,
   time,
+  occlusionPoint,
   onScenePick,
   onViewerReady,
 }: CesiumViewerProps) {
@@ -422,8 +430,11 @@ export default function CesiumViewer({
       })
     }
 
-    // Linea Observer→Target: segmento retto in 3D (linea di vista). La valutazione
-    // reale dell'occlusione arriverà in Fase 8 con ray casting.
+    // Linea Observer→Target: segmento retto in 3D (linea di vista). La
+    // valutazione dell'occlusione NON avviene qui: è nel modulo
+    // planning/occlusion (T-063, campionamento del suolo lungo la corda,
+    // ADR-020 — il ray casting non esiste in CesiumJS 1.146); il readout è
+    // nel box Dati e il punto occludente porta il marker rosso qui sotto.
     const sightLineId = 'line-observer-target'
     const existingSightLine = viewer.entities.getById(sightLineId)
     if (existingSightLine !== undefined) {
@@ -444,6 +455,38 @@ export default function CesiumViewer({
       })
     }
   }, [observer, target])
+
+  // Marker del punto occludente (T-064): posizionato sul SUOLO al punto più
+  // restrittivo dell'analisi (lat/lon del campione, quota = suolo campionato,
+  // che è l'ostacolo); rimosso quando l'analisi non individua un'occlusione.
+  useEffect(() => {
+    const viewer = viewerRef.current
+    if (viewer === null) {
+      return
+    }
+    const markerId = 'marker-occlusion'
+    const existing = viewer.entities.getById(markerId)
+    if (existing !== undefined) {
+      viewer.entities.remove(existing)
+    }
+    if (occlusionPoint === null) {
+      return
+    }
+    viewer.entities.add({
+      id: markerId,
+      position: Cartesian3.fromDegrees(
+        occlusionPoint.longitudeDeg,
+        occlusionPoint.latitudeDeg,
+        occlusionPoint.groundHeightM,
+      ),
+      point: {
+        pixelSize: 12,
+        color: Color.RED,
+        outlineColor: Color.BLACK,
+        outlineWidth: 2,
+      },
+    })
+  }, [occlusionPoint])
 
   return (
     <div style={{ position: 'absolute', inset: 0 }}>
