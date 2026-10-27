@@ -1,9 +1,14 @@
+import type { Cesium3DTileset } from 'cesium'
 import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_MAX_DETAIL_DISTANCE_M,
+  DEFAULT_TILE_QUALITY,
+  applyTilesetQuality,
   dynamicSseDensityForMaxDistanceM,
   resolveTileMaxDetailDistanceM,
+  resolveTileQuality,
   tilesetPerformanceOptions,
+  tilesetQualityOptions,
 } from './tilesetPerformance'
 
 // Replica della formula reale di CesiumJS 1.146 (verificata su
@@ -97,5 +102,95 @@ describe('resolveTileMaxDetailDistanceM', () => {
       expect(resolved.invalidWarning).toContain('tileMaxM')
       expect(resolved.invalidWarning).toContain(value)
     }
+  })
+})
+
+describe('tilesetQualityOptions', () => {
+  it('alta: default Cesium resi espliciti (SSE 16, cache 512 MB, overflow 512 MB, preload voli)', () => {
+    const options = tilesetQualityOptions('alta')
+    expect(options.maximumScreenSpaceError).toBe(16)
+    expect(options.cacheBytes).toBe(512 * 1024 * 1024)
+    expect(options.maximumCacheOverflowBytes).toBe(512 * 1024 * 1024)
+    expect(options.preloadFlightDestinations).toBe(true)
+  })
+
+  it('media (ipotesi da misura, ADR-021): SSE 32, cache 256 MB, overflow 256 MB', () => {
+    const options = tilesetQualityOptions('media')
+    expect(options.maximumScreenSpaceError).toBe(32)
+    expect(options.cacheBytes).toBe(256 * 1024 * 1024)
+    expect(options.maximumCacheOverflowBytes).toBe(256 * 1024 * 1024)
+    expect(options.preloadFlightDestinations).toBe(true)
+  })
+
+  it('eco (default, decisione umano 2026-10-21): SSE 64, cache 128 MB, niente preload voli', () => {
+    const options = tilesetQualityOptions('eco')
+    expect(options.maximumScreenSpaceError).toBe(64)
+    expect(options.cacheBytes).toBe(128 * 1024 * 1024)
+    expect(options.maximumCacheOverflowBytes).toBe(128 * 1024 * 1024)
+    expect(options.preloadFlightDestinations).toBe(false)
+  })
+
+  it('NON tocca dynamicScreenSpaceError: ortogonale ad ADR-015 (?tileMaxM=)', () => {
+    for (const level of ['alta', 'media', 'eco'] as const) {
+      const options = tilesetQualityOptions(level)
+      expect(options.dynamicScreenSpaceError).toBeUndefined()
+      expect(options.dynamicScreenSpaceErrorDensity).toBeUndefined()
+    }
+  })
+})
+
+describe('applyTilesetQuality', () => {
+  // L'applicazione a runtime muta i campi del tileset di sessione (d.ts 1.146
+  // L32487/L32509/L32521/L31981: non readonly, letti a ogni frame): il fake
+  // replica solo i quattro campi toccati.
+  function fakeTileset(): Cesium3DTileset {
+    return {
+      maximumScreenSpaceError: 16,
+      cacheBytes: 512 * 1024 * 1024,
+      maximumCacheOverflowBytes: 512 * 1024 * 1024,
+      preloadFlightDestinations: true,
+    } as unknown as Cesium3DTileset
+  }
+
+  it('muta le proprietà del tileset di sessione senza ricrearlo', () => {
+    const tileset = fakeTileset()
+    applyTilesetQuality(tileset, 'eco')
+    expect(tileset.maximumScreenSpaceError).toBe(64)
+    expect(tileset.cacheBytes).toBe(128 * 1024 * 1024)
+    expect(tileset.maximumCacheOverflowBytes).toBe(128 * 1024 * 1024)
+    expect(tileset.preloadFlightDestinations).toBe(false)
+  })
+
+  it('cambio bidirezionale a caldo: tornare a alta ripristina anche il preload voli', () => {
+    const tileset = fakeTileset()
+    applyTilesetQuality(tileset, 'eco')
+    applyTilesetQuality(tileset, 'alta')
+    expect(tileset.maximumScreenSpaceError).toBe(16)
+    expect(tileset.cacheBytes).toBe(512 * 1024 * 1024)
+    expect(tileset.preloadFlightDestinations).toBe(true)
+  })
+})
+
+describe('resolveTileQuality', () => {
+  it('assente/vuoto → default eco (decisione umano 2026-10-21), nessun avviso', () => {
+    expect(DEFAULT_TILE_QUALITY).toBe('eco')
+    expect(resolveTileQuality(undefined)).toEqual({ level: 'eco', invalidWarning: null })
+    expect(resolveTileQuality('')).toEqual({ level: 'eco', invalidWarning: null })
+  })
+
+  it('valori validi, normalizzati trim/minuscole come il provider', () => {
+    expect(resolveTileQuality('alta')).toEqual({ level: 'alta', invalidWarning: null })
+    expect(resolveTileQuality(' media ')).toEqual({ level: 'media', invalidWarning: null })
+    expect(resolveTileQuality('ECO')).toEqual({ level: 'eco', invalidWarning: null })
+  })
+
+  it('valore non valido → default eco + avviso che cita il valore e i valori ammessi', () => {
+    const resolved = resolveTileQuality('ultra')
+    expect(resolved.level).toBe('eco')
+    expect(resolved.invalidWarning).toContain('tileQuality')
+    expect(resolved.invalidWarning).toContain('ultra')
+    expect(resolved.invalidWarning).toContain('alta')
+    expect(resolved.invalidWarning).toContain('media')
+    expect(resolved.invalidWarning).toContain('eco')
   })
 })

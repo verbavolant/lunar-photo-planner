@@ -17,7 +17,14 @@ import {
 import 'cesium/Build/Cesium/Widgets/widgets.css'
 import { resolveSceneDataProvider } from './dataProvider'
 import { pickPointOnScene } from './pick'
-import { resolveTileMaxDetailDistanceM, tilesetPerformanceOptions } from './tilesetPerformance'
+import {
+  applyTilesetQuality,
+  resolveTileMaxDetailDistanceM,
+  resolveTileQuality,
+  tilesetPerformanceOptions,
+  tilesetQualityOptions,
+  type TileQualityLevel,
+} from './tilesetPerformance'
 import { acquireSessionTileset, markSessionTilesetDetached } from './tilesetSession'
 import { createMoonTexture, moonDiameterM, moonPositionEcef } from './moonRender'
 import { moonTopocentric, type MoonTopocentric } from '../astronomy/moon'
@@ -36,6 +43,12 @@ export interface CesiumViewerProps {
    * indecidibile o analisi assente).
    */
   occlusionPoint: RestrictivePoint | null
+  /**
+   * Livello di qualità dei tiles (T-067, ADR-021): tocca SOLO la densità della
+   * mesh disegnata; quote di suolo e occlusione passano dal sampler a max LOD
+   * (ADR-019/ADR-020) e restano immuni.
+   */
+  tileQuality: TileQualityLevel
   onScenePick: (point: GeoPoint) => void
   /** Chiamato dopo la creazione del Viewer (anche nel remount di StrictMode). */
   onViewerReady?: (viewer: Viewer) => void
@@ -100,6 +113,43 @@ function describeError(error: unknown): string {
     : 'vedi console per i dettagli'
 }
 
+// T-067 — misura del consumo tile (SOLO build di sviluppo: `import.meta.env.DEV`
+// è costante a compile time e Vite elimina il ramo dai build di produzione).
+// Espone su window il tileset di sessione e i contatori del protocollo di
+// misura di ADR-021: tile caricati (`tileLoad`, d.ts 1.146 L32134), falliti
+// (`tileFailed`, L32171) e picco di memoria del tileset
+// (`totalMemoryUsageInBytes`, getter readonly L32562); i byte di rete si
+// leggono da DevTools (filtro `tile.googleapis.com` o endpoint ion). La
+// guardia sull'identità evita listener doppi quando un remount
+// (StrictMode/HMR) riusa la stessa istanza di sessione.
+function installDevTilesetMeasurement(tileset: Cesium3DTileset): void {
+  if (!import.meta.env.DEV) {
+    return
+  }
+  const host = window as unknown as {
+    __lppTileset?: Cesium3DTileset
+    __lppTilesetStats?: { loaded: number; failed: number; peakMemoryBytes: number }
+  }
+  if (host.__lppTileset === tileset) {
+    return
+  }
+  const stats = { loaded: 0, failed: 0, peakMemoryBytes: 0 }
+  tileset.tileLoad.addEventListener(() => {
+    stats.loaded += 1
+    stats.peakMemoryBytes = Math.max(stats.peakMemoryBytes, tileset.totalMemoryUsageInBytes)
+  })
+  tileset.tileFailed.addEventListener(() => {
+    stats.failed += 1
+  })
+  // loadProgress scatta a fine frame: aggiorna il picco anche nei frame senza
+  // nuovi tileLoad (le geometrie in lavorazione crescono la memoria comunque).
+  tileset.loadProgress.addEventListener(() => {
+    stats.peakMemoryBytes = Math.max(stats.peakMemoryBytes, tileset.totalMemoryUsageInBytes)
+  })
+  host.__lppTileset = tileset
+  host.__lppTilesetStats = stats
+}
+
 // Scena CesiumJS con sorgente dati 3D configurabile (Fase 5b): Google
 // Photorealistic 3D Tiles via Map Tiles API diretta (provider 'google',
 // T-003, opt-in: quota Google 150 root request/min) oppure via Cesium ion,
@@ -114,6 +164,7 @@ export default function CesiumViewer({
   target,
   time,
   occlusionPoint,
+  tileQuality,
   onScenePick,
   onViewerReady,
 }: CesiumViewerProps) {
@@ -124,6 +175,15 @@ export default function CesiumViewer({
   // riferimento aggiornato senza dover essere ricreato.
   const onScenePickRef = useRef(onScenePick)
   onScenePickRef.current = onScenePick
+  // Livello qualità corrente (T-067): il mount effect gira una volta sola e i
+  // callback di attach del tileset di sessione possono scattare quando la
+  // selezione è già cambiata: leggono il riferimento, sempre aggiornato.
+  const tileQualityRef = useRef(tileQuality)
+  tileQualityRef.current = tileQuality
+  // Tileset di sessione attaccato alla scena corrente (null finché il
+  // caricamento non è completo e dopo l'unmount): l'effetto del cambio
+  // livello lo usa per mutare le proprietà senza ricreare il tileset.
+  const attachedTilesetRef = useRef<Cesium3DTileset | null>(null)
   // Stato di rendering della Luna: ricalcolato solo quando cambiano Observer o
   // tempo; i CallbackProperty dell'entità lo leggono a ogni frame (aggiornamento
   // fluido, senza ricreare l'entità).
@@ -174,6 +234,16 @@ export default function CesiumViewer({
     )
     if (tileMaxM.invalidWarning !== null) {
       setNotice(tileMaxM.invalidWarning)
+    }
+
+    // T-067: avviso del parametro `?tileQuality=` non valido (pattern
+    // tileMaxM). Il valore EFFETTIVO arriva dalla prop `tileQuality` (stato
+    // App, che risolve lo stesso parametro con la stessa funzione pura).
+    const tileQualityParam = resolveTileQuality(
+      new URLSearchParams(window.location.search).get('tileQuality') ?? undefined,
+    )
+    if (tileQualityParam.invalidWarning !== null) {
+      setNotice(tileQualityParam.invalidWarning)
     }
 
     // Ramo 'google-ion': il token ion va impostato prima di ogni richiesta
@@ -309,6 +379,8 @@ export default function CesiumViewer({
               showCreditsOnScreen: true,
               // T-039: dettaglio limitato alla distanza scelta (?tileMaxM=).
               ...tilesetPerformanceOptions(tileMaxM.maxDetailDistanceM),
+              // T-067: livello qualità iniziale (?tileQuality=, default Eco).
+              ...tilesetQualityOptions(tileQualityRef.current),
             }),
           onNotice: setNotice,
           describeError,
@@ -324,6 +396,12 @@ export default function CesiumViewer({
             // l'ellissoide di base.
             viewer.scene.globe.show = false
             attachedTileset = tileset
+            attachedTilesetRef.current = tileset
+            // Riallinea il livello qualità al valore corrente: tra la create
+            // (memoizzata per sessione) e l'attach la selezione può cambiare,
+            // e su remount l'istanza è riusata senza nuova create.
+            applyTilesetQuality(tileset, tileQualityRef.current)
+            installDevTilesetMeasurement(tileset)
           })
           .catch((error: unknown) => {
             if (disposed) {
@@ -357,6 +435,8 @@ export default function CesiumViewer({
             showCreditsOnScreen: true,
             // T-039: dettaglio limitato alla distanza scelta (?tileMaxM=).
             ...tilesetPerformanceOptions(tileMaxM.maxDetailDistanceM),
+            // T-067: livello qualità iniziale (?tileQuality=, default Eco).
+            ...tilesetQualityOptions(tileQualityRef.current),
           }),
         onNotice: setNotice,
         describeError,
@@ -370,6 +450,12 @@ export default function CesiumViewer({
           tilesetHolder.add(tileset)
           viewer.scene.globe.show = false
           attachedTileset = tileset
+          attachedTilesetRef.current = tileset
+          // Riallinea il livello qualità al valore corrente: tra la create
+          // (memoizzata per sessione) e l'attach la selezione può cambiare,
+          // e su remount l'istanza è riusata senza nuova create.
+          applyTilesetQuality(tileset, tileQualityRef.current)
+          installDevTilesetMeasurement(tileset)
         })
         .catch((error: unknown) => {
           if (disposed) {
@@ -396,8 +482,21 @@ export default function CesiumViewer({
       resizeObserver.disconnect()
       viewer.destroy()
       viewerRef.current = null
+      attachedTilesetRef.current = null
     }
   }, [])
+
+  // T-067 (ADR-021): il cambio di livello a runtime MUTA le proprietà del
+  // tileset di sessione (maximumScreenSpaceError, cache, preload voli):
+  // nessun reload → nessuna root request extra (finestra di autorizzazione
+  // root ~3 h, T-003). Se il tileset non è ancora attaccato, il callback di
+  // attach applica il livello corrente (tileQualityRef).
+  useEffect(() => {
+    const tileset = attachedTilesetRef.current
+    if (tileset !== null) {
+      applyTilesetQuality(tileset, tileQuality)
+    }
+  }, [tileQuality])
 
   // Marker Observer/Target: ricreati quando cambia il punto nello stato.
   useEffect(() => {

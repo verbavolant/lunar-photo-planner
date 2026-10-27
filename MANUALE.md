@@ -20,7 +20,7 @@
 6. [Riferimento completo dei comandi](#6-riferimento-completo-dei-comandi)
 7. [Leggere i numeri (con esempi)](#7-leggere-i-numeri-con-esempi)
 8. [Trovare l'istante giusto: Cerca allineamenti Luna](#8-trovare-listante-giusto-cerca-allineamenti-luna)
-9. [Parametri nell'URL (`?provider=`, `?tileMaxM=`)](#9-parametri-nellurl-provider-tilemaxm)
+9. [Parametri nell'URL (`?provider=`, `?tileMaxM=`, `?tileQuality=`)](#9-parametri-nellurl-provider-tilemaxm-tilequality)
 10. [Eseguire l'app in locale](#10-eseguire-lapp-in-locale)
 11. [Messaggi a schermo e problemi frequenti](#11-messaggi-a-schermo-e-problemi-frequenti)
 12. [Limitazioni dichiarate e precisione](#12-limitazioni-dichiarate-e-precisione)
@@ -33,7 +33,7 @@
 
 **Che cos'è.** Un pianificatore di fotografie lunari in scena 3D fotorealistica:
 
-- piazze, edifici e montagne visibili in 3D (Google Photorealistic 3D Tiles, serviti da Cesium ion o dalla Map Tiles API a seconda di come è configurato il sito: [§9](#9-parametri-nellurl-provider-tilemaxm));
+- piazze, edifici e montagne visibili in 3D (Google Photorealistic 3D Tiles, serviti da Cesium ion o dalla Map Tiles API a seconda di come è configurato il sito: [§9](#9-parametri-nellurl-provider-tilemaxm-tilequality));
 - posizione della Luna **topocentrica** — cioè calcolata per il punto in cui ti metterai tu, con la parallasse corretta;
 - misure reali tra te e il soggetto: distanze, azimut, dislivello, angolo verticale;
 - ricerca automatica dei prossimi istanti in cui la Luna passa sulla linea **Osservatore → Target**;
@@ -148,6 +148,7 @@ Premi **`Vista Luna`**: la camera si mette 1 m sopra l'Osservatore, rivolta vers
 | `Vista Luna` | camera **1 m sopra l'Osservatore**, orientata con azimut = azimut della Luna e inclinazione = altitudine della Luna (volo animato di 2 s) | richiede l'Osservatore. È la posa del fotografo: da qui vedi la Luna dove la vedrai davvero |
 | `Sopra Observer · 100 m` | vista dall'alto 100 m sopra l'Osservatore, puntato su di lui, nord in alto | disabilitato finché l'Osservatore non è posizionato |
 | `Cerca allineamenti Luna` | apre la finestra di ricerca degli allineamenti | disabilitato se mancano Osservatore o Target |
+| «Qualità tiles» (menu) | sceglie quanto dettaglio caricare nella mesh 3D: `Alta`, `Media`, `Eco` (default) | si applica **a caldo**, senza ricaricare la scena; quote e occlusione non cambiano col livello ([§9](#9-parametri-nellurl-provider-tilemaxm-tilequality)) |
 | `Manuale` | apre questo manuale in una **finestra separata**, formattato in HTML | il contenuto è `MANUALE.md` alla root del repository; i collegamenti ai file del repo (es. `README.md`) portano a GitHub |
 
 A destra della barra, oltre ai pulsanti: **`Sviluppo: T-061`** — l'ID dell'ultimo task completato nel piano di sviluppo del progetto; si aggiorna a ogni task chiuso. L'orario in uso non sta qui: è nella card Tempo, accanto allo slider ([§6.7](#67-card-tempo-fascia-in-basso-tutta-larghezza)).
@@ -443,7 +444,7 @@ Se invece il problema è inverso — il Target è fisso e cerchi **dove** metter
 
 ---
 
-## 9. Parametri nell'URL (`?provider=`, `?tileMaxM=`)
+## 9. Parametri nell'URL (`?provider=`, `?tileMaxM=`, `?tileQuality=`)
 
 Si aggiungono all'indirizzo del sito e si applicano **al caricamento della pagina**: basta ricaricare la pagina perché abbiano effetto.
 
@@ -455,6 +456,7 @@ https://verbavolant.github.io/lunar-photo-planner/?provider=google-ion&tileMaxM=
 |---|---|---|---|
 | `provider` | `google`, `google-ion` (alias accettato: `cesium`) | `google` | sceglie da dove arrivano i tile 3D fotorealistici |
 | `tileMaxM` | numero di metri > 0 | `1000` | distanza oltre la quale il dettaglio dei tile viene ridotto: valori piccoli = caricamento più leggero, valori grandi = più nitidezza in lontananza (e più dati) |
+| `tileQuality` | `alta`, `media`, `eco` | `eco` | quanto dettaglio caricare nella mesh 3D: `alta` = massimo dettaglio, `media` = intermedio, `eco` = il minimo indispensabile (dimensioni e ingombri indicativi, massima economia di tile) |
 
 **`provider`.** Le due sorgenti sono la **stessa mesh** fotorealistica di Google, con percorso diverso:
 
@@ -469,6 +471,16 @@ Se il sito pubblico non carica la mesh, provare `?provider=google-ion` è il pri
 - `?tileMaxM=2000` (o più) quando devi valutare dettagli lontani, ad esempio la sagoma di una cima vista da parecchi chilometri.
 
 Un valore non numerico o ≤ 0 viene ignorato con avviso e si torna a 1000 m.
+
+**`tileQuality`.** Regola quanto dettaglio caricare nella mesh. Il menu **«Qualità tiles»** nella barra comandi cambia livello **a caldo**, senza ricaricare la scena; il parametro URL fissa invece il livello di **partenza**:
+
+- `alta` → dettaglio pieno (il comportamento "di serie" di CesiumJS);
+- `media` → dettaglio intermedio;
+- `eco` → massima economia: bastano dimensioni e ingombri indicativi, non la resa fotografica (ed è il default).
+
+Quote di suolo, altezza dal suolo e occlusione **non cambiano** col livello: sono misurate sul dato a massima risoluzione disponibile ([§6.9](#69-occlusione-della-linea-di-vista)), a prescindere da quanto dettaglio viene disegnato. Contropartita dei livelli economici: la cache dei tile è più piccola, quindi navigando a lungo nella stessa zona qualche tile può essere riscaricato.
+
+Un valore non riconosciuto produce un avviso a schermo e il ritorno a `eco`.
 
 ---
 
@@ -503,12 +515,13 @@ Senza chiave o token l'app resta utilizzabile: si naviga sul globo e si posizion
 | Messaggio (testo reale) | Perché appare | Cosa fare |
 |---|---|---|
 | `Limite di richieste <sorgente> raggiunto (429). La scena resta sulla vista base senza mesh 3D; nuovo tentativo automatico tra 30 s (tentativo 2 di 4).` | il provider dei tile ha risposto **429 / rate limit**. L'app **non** riprova subito: riprova dopo 30 s, poi 2 min, poi 10 min | aspetta senza ricaricare; intanto puoi lavorare sul globo (misure e calcoli funzionano lo stesso) |
-| `Limite di richieste <sorgente> raggiunto (429). … nessun altro tentativo in questa sessione: ricarica la pagina per riprovare.` | esauriti i 4 tentativi | **ricarica la pagina** (F5). Se sei sul sito pubblico e succede spesso, prova `?provider=google-ion` ([§9](#9-parametri-nellurl-provider-tilemaxm)) |
+| `Limite di richieste <sorgente> raggiunto (429). … nessun altro tentativo in questa sessione: ricarica la pagina per riprovare.` | esauriti i 4 tentativi | **ricarica la pagina** (F5). Se sei sul sito pubblico e succede spesso, prova `?provider=google-ion` ([§9](#9-parametri-nellurl-provider-tilemaxm-tilequality)) |
 | `Google Photorealistic 3D Tiles non attivi: imposta VITE_GOOGLE_MAPS_API_KEY in .env.local e riavvia il server di sviluppo.` | esecuzione locale con provider `google` e chiave assente | configura la chiave come in [§10](#10-eseguire-lapp-in-locale) |
 | `Provider "google-ion" attivo ma senza token ion: imposta VITE_CESIUM_ION_TOKEN in .env.local (token da https://ion.cesium.com/tokens) e riavvia il server di sviluppo.` | provider `google-ion` senza token | configura il token ion (o, sul sito pubblico, segnalalo a chi lo ospita) |
 | `Errore nel caricamento di <sorgente>: <dettaglio>.` | errore di rete/blocco del provider (non 429) | verifica la connessione, disattiva estensioni che bloccano le richieste, ricarica |
 | `Provider non valido: "xyz" (valori ammessi: google, google-ion (alias: cesium)).` | `?provider=` scritto male | correggi o rimuovi il parametro |
 | `Parametro "tileMaxM" non valido: "abc" (atteso un numero di metri > 0).` | `?tileMaxM=` non numerico o ≤ 0 | correggi; intanto vale il default 1000 m |
+| `Parametro "tileQuality" non valido: "xyz" (valori ammessi: alta, media, eco).` | `?tileQuality=` scritto male | correggi o rimuovi il parametro; intanto vale `eco` |
 | `Linea di vista indefinita: Observer e Target coincidono.` | hai cliccato lo stesso punto per entrambi | riposiziona uno dei due |
 | `Nessun allineamento nella finestra cercata.` | la Luna non passa entro la tolleranza nella finestra | allarga `Tolleranza (°)` o `Finestra (giorni)`, oppure cambia `Ricerca da` ([§8.3](#83-leggere-e-adottare-i-risultati)) |
 | Righe misure con `—` | valore non calcolabile (Observer e Target coincidenti, o quasi antipodali: la geodetica non converge) | allontana i due punti; a distanze intercontinentali alcune righe non sono disponibili |
@@ -547,7 +560,8 @@ Sono i limiti **noti e voluti** dell'attuale release, non bug da segnalare:
 | Funzionalità non ancora presenti | Ricerca per indirizzo, confronto di più candidati, salvataggio/condivisione della pianificazione (unica eccezione: la Home dell'Osservatore, §6.1), stime di esposizione. |
 | Tempo | Precisione **al minuto** sull'input e sulle etichette; la ricerca allineamenti campiona con il `Passo (min)` scelto e raffina gli attraversamenti, ma il risultato mostrato resta in ore:minuti. |
 | Fuso orario | Sempre quello del **browser**. Per pianificare all'estero, considera lo scostamento a mano. |
-| Dati 3D | La mesh fotorealistica arriva da Google (via Cesium ion o via Map Tiles API, a seconda della configurazione: [§9](#9-parametri-nellurl-provider-tilemaxm)) ed è disponibile solo per le aree coperte dal servizio; disponibilità e risoluzione dipendono dal provider, non dall'app. |
+| Dati 3D | La mesh fotorealistica arriva da Google (via Cesium ion o via Map Tiles API, a seconda della configurazione: [§9](#9-parametri-nellurl-provider-tilemaxm-tilequality)) ed è disponibile solo per le aree coperte dal servizio; disponibilità e risoluzione dipendono dal provider, non dall'app. |
+| Qualità della mesh | Il livello scelto (`Alta`/`Media`/`Eco`) tocca **solo quanto dettaglio viene disegnato**: quote, altezze e occlusione sono misurate sul dato a massima risoluzione e non cambiano col livello. Con `Eco` ingombri e distanze restano attendibili, la resa visiva è volutamente più povera. |
 
 ---
 

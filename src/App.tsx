@@ -3,6 +3,7 @@ import type { Viewer } from 'cesium'
 import CesiumViewer from './cesium/CesiumViewer'
 import CameraPovCard from './cesium/CameraPovCard'
 import { createTerrainHeightSampler } from './cesium/terrainSample'
+import { resolveTileQuality, type TileQualityLevel } from './cesium/tilesetPerformance'
 import { flyToObserverView, flyToOverhead, moveCameraWithObserver } from './cesium/camera'
 import { moonTopocentric } from './astronomy/moon'
 import {
@@ -354,6 +355,17 @@ export default function App() {
   const [observerHeightStepM, setObserverHeightStepM] = useState(1)
   // Passo (m) dei comandi di spostamento orizzontale dell'Observer (T-037).
   const [observerMoveStepM, setObserverMoveStepM] = useState(10)
+  // Livello qualità dei tiles 3D (T-067, ADR-021): default Eco (decisione
+  // umano 2026-10-21). All'avvio può essere impostato con
+  // ?tileQuality=alta|media|eco (invalido → default + avviso a schermo,
+  // pattern tileMaxM): la stessa risoluzione pura è rifatta in CesiumViewer
+  // per il solo avviso. Il cambio a runtime muta il tileset di sessione
+  // senza ricaricarlo (nessuna root request extra).
+  const [tileQuality, setTileQuality] = useState<TileQualityLevel>(() =>
+    resolveTileQuality(
+      new URLSearchParams(window.location.search).get('tileQuality') ?? undefined,
+    ).level,
+  )
   const [baseDateMs, setBaseDateMs] = useState<number>(() => Date.now())
   const [sliderOffsetMin, setSliderOffsetMin] = useState(0)
   const [alignmentWindowOpen, setAlignmentWindowOpen] = useState(false)
@@ -874,6 +886,21 @@ export default function App() {
         >
           {reverseBusy ? 'Reverse: campionamento…' : 'Cerca luogo per il Target'}
         </button>
+        <label
+          style={ROW_STYLE}
+          title="Qualità della mesh 3D: Alta = massimo dettaglio, Media = intermedia, Eco = meno tile possibile (default). Quote di suolo e occlusione non cambiano; il cambio si applica senza ricaricare la scena."
+        >
+          Qualità tiles{' '}
+          <select
+            value={tileQuality}
+            onChange={(event) => setTileQuality(resolveTileQuality(event.target.value).level)}
+            aria-label="Livello di qualità dei tiles 3D (Alta, Media o Eco)"
+          >
+            <option value="alta">Alta</option>
+            <option value="media">Media</option>
+            <option value="eco">Eco (default)</option>
+          </select>
+        </label>
         <button
           onClick={openManualeWindow}
           style={BUTTON_STYLE}
@@ -1319,6 +1346,7 @@ export default function App() {
                 ? occlusionReport.mostRestrictive
                 : null
             }
+            tileQuality={tileQuality}
             onScenePick={handleScenePick}
             onViewerReady={(viewer) => {
               viewerRef.current = viewer

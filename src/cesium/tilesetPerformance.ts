@@ -103,3 +103,129 @@ export function resolveTileMaxDetailDistanceM(
   }
   return { maxDetailDistanceM: parsed, invalidWarning: null }
 }
+
+// ===== Livelli di qualità dei tiles (T-067, ADR-021) =====
+//
+// Richiesta umano 2026-10-21: «consumare meno tiles, non serve una
+// raffigurazione perfetta: bastano dimensioni e ingombri indicativi».
+// Tre preset applicati al tileset Google (entrambi i provider). I valori sono
+// IPOTESI di partenza: il Done di T-067 richiede la misura live a path camera
+// fisso; modifiche ai preset dopo la misura → riconferma dell'umano.
+//
+// Meccanismo (Cesium.d.ts 1.146):
+//   - `maximumScreenSpaceError` (default 16, L31760): soglia di raffinamento
+//     per errore a schermo; alzarla carica tile più grossolani ANCHE da vicino.
+//   - `cacheBytes` (default 536870912 = 512 MB, L31761) e
+//     `maximumCacheOverflowBytes` (default 536870912 = 512 MB, L31762): memoria
+//     della cache dei tile (base + headroom).
+//   - `preloadFlightDestinations` (default true, L31767): precarica i tile
+//     della destinazione durante i voli di camera.
+// Tutti e quattro sono campi della classe NON readonly (L32487, L32509,
+// L32521, L31981), letti a ogni frame: mutarli a runtime NON ricrea il
+// tileset e NON genera root request (protegge la finestra di autorizzazione
+// root ~3 h, T-003/ADR-016). ORTOGONALE ad ADR-015: `dynamicScreenSpaceError`
+// decostruisce a DISTANZA, il livello abbassa il LOD anche da vicino.
+// Invariante: quote di suolo e occlusione passano da `sampleHeightMostDetailed`
+// (sempre a max LOD, L45705–45725 — ADR-019/020): immuni dal livello.
+
+/** Livelli selezionabili (selettore UI in barra comandi e `?tileQuality=`). */
+export type TileQualityLevel = 'alta' | 'media' | 'eco'
+
+/** Default scelto dall'umano (2026-10-21): Eco, massima economia di tile. */
+export const DEFAULT_TILE_QUALITY: TileQualityLevel = 'eco'
+
+interface TileQualityPreset {
+  maximumScreenSpaceError: number
+  cacheBytes: number
+  maximumCacheOverflowBytes: number
+  preloadFlightDestinations: boolean
+}
+
+const MIB = 1024 * 1024
+
+/**
+ * Preset dei tre livelli. VALORI = IPOTESI da validare con la misura live
+ * (ADR-021): «alta» replica i default Cesium resi espliciti; «media» ed «eco»
+ * dimezzano a scala SSE ×2 / cache ÷2, con overflow = cache (stesso rapporto
+ * 1:1 del default Cesium) e preload voli disattivato solo per «eco».
+ */
+const TILE_QUALITY_PRESETS: Record<TileQualityLevel, TileQualityPreset> = {
+  alta: {
+    maximumScreenSpaceError: 16,
+    cacheBytes: 512 * MIB,
+    maximumCacheOverflowBytes: 512 * MIB,
+    preloadFlightDestinations: true,
+  },
+  media: {
+    maximumScreenSpaceError: 32,
+    cacheBytes: 256 * MIB,
+    maximumCacheOverflowBytes: 256 * MIB,
+    preloadFlightDestinations: true,
+  },
+  eco: {
+    maximumScreenSpaceError: 64,
+    cacheBytes: 128 * MIB,
+    maximumCacheOverflowBytes: 128 * MIB,
+    preloadFlightDestinations: false,
+  },
+}
+
+/**
+ * Opzioni di creazione del tileset per il livello scelto: da spargere nelle
+ * `ConstructorOptions` di `Cesium3DTileset.fromUrl`/`fromIonAssetId` accanto
+ * a `tilesetPerformanceOptions` (che NON tocca questi campi: test T-039).
+ */
+export function tilesetQualityOptions(
+  level: TileQualityLevel,
+): Cesium3DTileset.ConstructorOptions {
+  const preset = TILE_QUALITY_PRESETS[level]
+  return {
+    maximumScreenSpaceError: preset.maximumScreenSpaceError,
+    cacheBytes: preset.cacheBytes,
+    maximumCacheOverflowBytes: preset.maximumCacheOverflowBytes,
+    preloadFlightDestinations: preset.preloadFlightDestinations,
+  }
+}
+
+/**
+ * Applica il livello a un tileset GIÀ in scena mutandone le proprietà
+ * (d.ts 1.146: campi non readonly, letti a ogni frame): nessun reload e
+ * nessuna root request extra. Usato dal cambio di livello a runtime e al
+ * riattacco del tileset di sessione (istanza riusata senza nuova `create`).
+ */
+export function applyTilesetQuality(tileset: Cesium3DTileset, level: TileQualityLevel): void {
+  const preset = TILE_QUALITY_PRESETS[level]
+  tileset.maximumScreenSpaceError = preset.maximumScreenSpaceError
+  tileset.cacheBytes = preset.cacheBytes
+  tileset.maximumCacheOverflowBytes = preset.maximumCacheOverflowBytes
+  tileset.preloadFlightDestinations = preset.preloadFlightDestinations
+}
+
+export interface ResolvedTileQuality {
+  level: TileQualityLevel
+  /**
+   * Avviso quando `?tileQuality=` era presente ma non valido: il default
+   * scatta comunque e l'avviso va mostrato, non ingoiato (pattern di
+   * dataProvider.ts e di `resolveTileMaxDetailDistanceM`).
+   */
+  invalidWarning: string | null
+}
+
+/**
+ * Risolve l'override runtime `?tileQuality=alta|media|eco` sul default
+ * DEFAULT_TILE_QUALITY: assente/vuoto = default; presente ma non valido =
+ * default + avviso. Normalizzazione trim/minuscole come il provider.
+ */
+export function resolveTileQuality(queryValue: string | undefined): ResolvedTileQuality {
+  if (queryValue === undefined || queryValue.trim() === '') {
+    return { level: DEFAULT_TILE_QUALITY, invalidWarning: null }
+  }
+  const normalized = queryValue.trim().toLowerCase()
+  if (normalized === 'alta' || normalized === 'media' || normalized === 'eco') {
+    return { level: normalized, invalidWarning: null }
+  }
+  return {
+    level: DEFAULT_TILE_QUALITY,
+    invalidWarning: `Parametro "tileQuality" non valido: "${queryValue}" (valori ammessi: alta, media, eco).`,
+  }
+}
