@@ -66,7 +66,7 @@
 ┌──────────────────────────────────────────────────────────────────────────┐
 │ BARRETTA COMANDI  Osservatore · Target · Azzera · Vai a Home ·           │
 │    Imposta come Home · Vista Luna · Sopra Observer · 100 m ·             │
-│    Cerca allineamenti Luna · Cerca luogo per il Target    Sviluppo: T-071│
+│    Cerca allineamenti Luna · Cerca luogo per il Target    Sviluppo: T-038│
 ├───────────────────────────┬──────────────────────────────────────────────┤
 │ BOX LATERALE (≈380 px)    │                                              │
 │  • POV camera             │            SCENA 3D                          │
@@ -152,7 +152,7 @@ Premi **`Vista Luna`**: la camera si mette 1 m sopra l'Osservatore, rivolta vers
 | «Caricamento tiles: N%» (testo, compare solo mentre i tile arrivano) | mostra l'avanzamento del caricamento della mesh 3D; sparisce a caricamento concluso | la percentuale è una **stima**: CesiumJS non espone il totale dei tile da caricare (il conteggio delle richieste in corso è esatto); dettagli in [§9](#9-parametri-nellurl-provider-tilemaxm-tilequality) |
 | `Manuale` | apre questo manuale in una **finestra separata**, formattato in HTML | il contenuto è `MANUALE.md` alla root del repository; i collegamenti ai file del repo (es. `README.md`) portano a GitHub |
 
-A destra della barra, oltre ai pulsanti: **`Sviluppo: T-071`** — l'ID dell'ultimo task completato nel piano di sviluppo del progetto; si aggiorna a ogni task chiuso. L'orario in uso non sta qui: è nella card Tempo, accanto allo slider ([§6.7](#67-card-tempo-fascia-in-basso-tutta-larghezza)).
+A destra della barra, oltre ai pulsanti: **`Sviluppo: T-038`** — l'ID dell'ultimo task completato nel piano di sviluppo del progetto; si aggiorna a ogni task chiuso. L'orario in uso non sta qui: è nella card Tempo, accanto allo slider ([§6.7](#67-card-tempo-fascia-in-basso-tutta-larghezza)).
 
 > **Il punto attivo comanda il clic sulla scena.** Se dopo aver posizionato il Target lasci `Target` selezionato e clicchi sulla scena, sposti il **Target**, non l'Osservatore. Controlla quale dei due pulsanti è evidenziato.
 
@@ -182,12 +182,12 @@ Titolo, **disco lunare** disegnato con la **frazione illuminata reale** all'orar
 | `Quota (ellissoide)` | quota del punto in metri sopra l'ellissoide WGS84 |
 | `Altezza dal suolo` | differenza tra la quota corrente e la quota del punto dove hai cliccato |
 | `−` / campo numerico / `+` con `passo` 1 m · 10 m · 100 m | alza o abbassa l'Osservatore dal suolo; nel campo puoi scrivere direttamente il valore in metri (clamp 0–20.000 m) |
-| `▲ avanti` / `▼ indietro` / `◀ sinistra` / `▶ destra` con `passo` 1 m · 10 m · 100 m | sposta l'Osservatore **rispetto alla direzione di vista corrente** della camera, e la vista segue il punto |
+| `▲ avanti` / `▼ indietro` / `◀ sinistra` / `▶ destra` con `passo` 1 m · 10 m · 100 m | sposta l'Osservatore **rispetto alla direzione di vista corrente** della camera, e la vista segue il punto. Prima di applicare lo spostamento l'app **misura il suolo alla nuova posizione** («Misuro il suolo alla nuova posizione…») e il punto arriva già appoggiato, con `Altezza dal suolo` invariata |
 
 Due dettagli operativi:
 
 1. **"avanti/destra" non sono il nord:** sono avanti/destra *rispetto a dove stai guardando*. Se ruoti la camera, cambia anche il significato dei quattro pulsanti. Per riferimenti stabili usa la vista `Sopra Observer · 100 m` (nord in alto).
-2. **Il suolo di riferimento è quello del clic** e non viene rimisurato quando ti sposti in orizzontale o in verticale: se ti sposti su un terreno molto diverso (da piazza a colle), riposiziona l'Osservatore con un nuovo clic, così `Altezza dal suolo` riparte da 0 sul nuovo punto.
+2. **Suolo e spostamenti:** con i quattro comandi direzionali il suolo alla nuova posizione viene **rimisurato** prima di applicare lo spostamento (l'`Altezza dal suolo` resta invariata): su pendenze il marker resta appoggiato. Se il suolo non è determinabile (acqua, zona senza mesh 3D) o la misura non arriva, lo spostamento **non è applicato** e compare la nota sotto i comandi; la prima misura su una zona non ancora vista può richiedere qualche secondo (download dei tile necessari, timeout 60 s). Con `−`/`+`/campo numerico il suolo di riferimento resta invece quello del clic per definizione: cambi la distanza da quel suolo, non il suolo; per ripartire da un nuovo riferimento usa un nuovo clic.
 
 ### 6.5 Card "Dati" (misure, Luna, allineamento ora)
 
@@ -559,7 +559,7 @@ Sono i limiti **noti e voluti** dell'attuale release, non bug da segnalare:
 | Altitudine della Luna | Calcolata **senza rifrazione atmosferica**. Verso l'orizzonte la Luna reale appare **più alta** di quanto mostrato (frazioni di grado, dello stesso ordine del diametro lunare): sopra i ~10° l'effetto è trascurabile, vicino all'orizzonte usa il valore come guida e verifica sul posto. |
 | Posizione della Luna | **Topocentrica** per l'Osservatore scelto (parallasse corretta): azimut, altitudine, distanza e diametro sono i valori reali per quel punto, verificati contro effemeridi autorevoli. |
 | Ostacoli | L'occlusione è valutata **campionando** la superficie 3D in 256 punti lungo la linea di vista ([§6.9](#69-occlusione-della-linea-di-vista)), non con ray casting: ostacoli più sottili del passo di campionamento o marginali possono sfuggire; zone non coperte dalla mesh 3D danno «non determinabile» (l'app scarica da sola i tile necessari lungo la linea), mai «libera». Conta solo ciò che è effettivamente modellato nella mesh. |
-| Suolo sotto l'Osservatore | `Altezza dal suolo` è riferita alla quota letta **al momento del clic** e non viene rimisurata quando ti sposti (i tile 3D non espongono un terreno campionabile): dopo grandi spostamenti, riposiziona l'Osservatore. |
+| Suolo sotto l'Osservatore | `Altezza dal suolo` è riferita alla quota letta **al momento del clic**; dopo uno spostamento direzionale (◀▲▼▶) il suolo alla nuova posizione è **ricampionato** sui 3D Tiles prima di applicare il movimento — suolo non determinabile → spostamento non applicato, mai inventato. `−`/`+`/campo numerico cambiano solo la distanza dal suolo di riferimento del clic. |
 | Fase lunare | La frazione illuminata è **geocentrica** (definizione standard delle fasi); lo scarto topocentrico è sotto l'1%. Il **disco** disegnato è una rappresentazione equivalente (nessuna librazione, nessun dettaglio dei mari): contano i numeri. |
 | Fotocamera | Nessuna simulazione di sensore, focale, frustum o "Luna nel frame": [calcolo a mano, §7.3](#73-dal-numero-alla-focale). |
 | Funzionalità non ancora presenti | Ricerca per indirizzo, confronto di più candidati, salvataggio/condivisione della pianificazione (unica eccezione: la Home dell'Osservatore, §6.1), stime di esposizione. |

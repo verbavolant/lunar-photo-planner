@@ -79,7 +79,7 @@ const TOOLBAR_STYLE = {
 // l'ID dell'ultimo task completato nel piano (docs/ai/TASKS.md), così l'umano
 // vede sul live fino a dove è arrivato lo sviluppo. Aggiornare la costante a
 // ogni task chiuso.
-const DEVELOPMENT_STATUS = 'T-071'
+const DEVELOPMENT_STATUS = 'T-038'
 
 // Distanza massima Observer↔Target esplorata dal Reverse Planner (T-060), in
 // metri: default 2 km (scala urbana, copertura dei Google 3D Tiles), editabile
@@ -366,6 +366,13 @@ export default function App() {
   const [target, setTarget] = useState<GeoPoint | null>(null)
   const [activePoint, setActivePoint] = useState<PlannerPointId>('observer')
   const viewerRef = useRef<Viewer | null>(null)
+  // Specchio sincrono dell'Observer per gli esiti async (T-038): se durante
+  // l'attesa della nuova quota del suolo l'Osservatore cambia per altra via
+  // (pick, ±/input altezza, Home, Reverse), lo spostamento in attesa è scartato.
+  const observerRef = useRef<GeoPoint | null>(observer)
+  useEffect(() => {
+    observerRef.current = observer
+  }, [observer])
   // Viewer anche in stato (non solo ref): la card POV camera si iscrive ai suoi
   // eventi (T-035).
   const [viewer, setViewer] = useState<Viewer | null>(null)
@@ -378,6 +385,12 @@ export default function App() {
   const [observerHeightStepM, setObserverHeightStepM] = useState(1)
   // Passo (m) dei comandi di spostamento orizzontale dell'Observer (T-037).
   const [observerMoveStepM, setObserverMoveStepM] = useState(10)
+  // Spostamento direzionale (T-038): mentre arriva la nuova quota del suolo i
+  // quattro comandi sono disabilitati (una misura alla volta) e sotto di essi
+  // compare la nota d'attesa; suolo non determinabile o errore di campionamento
+  // → spostamento non applicato + nota esplicita (pattern reverseNote).
+  const [observerMoveBusy, setObserverMoveBusy] = useState(false)
+  const [observerMoveNote, setObserverMoveNote] = useState<string | null>(null)
   // Livello qualità dei tiles 3D (T-067, ADR-021): default Media (decisione
   // umano 2026-10-28, T-071; prima Eco). All'avvio può essere impostato con
   // ?tileQuality=alta|media|eco (invalido → default + avviso a schermo,
@@ -549,18 +562,77 @@ export default function App() {
   /**
    * Sposta l'Observer in orizzontale della distanza scelta, lungo la direzione
    * indicata rispetto all'azimut corrente della vista (T-037): 0 = avanti,
-   * 90 = destra, 180 = indietro, 270 = sinistra. La quota resta quella
-   * corrente: il suolo non viene rimisurato (ADR-012) — follow-up T-038.
+   * 90 = destra, 180 = indietro, 270 = sinistra. T-038, modalità «attendi la
+   * misura» (conferma umano 2026-10-28): la quota del suolo alla nuova lat/lon
+   * viene campionata col sampler terreno (ADR-019/022) PRIMA di applicare lo
+   * spostamento, e il punto arriva già appoggiato al nuovo suolo con l'altezza
+   * dal suolo corrente conservata (clamp [0, 20 000] m in
+   * `observerAtHeightAboveGround`). Suolo non determinabile (acqua o mesh non
+   * caricata) o errore di campionamento → spostamento NON applicato + nota.
+   * Mentre la misura è in attesa i comandi sono disabilitati: un'operazione
+   * alla volta, niente debounce (la quota 429 è protetta dal backoff T-040).
    */
-  function moveObserverViewRelative(offsetDeg: number): void {
-    if (observer === null) {
+  async function moveObserverViewRelative(offsetDeg: number): Promise<void> {
+    if (observer === null || observerMoveBusy) {
       return
     }
+    const clickedObserver = observer
+    const clickedGroundM = observerGroundM
     const viewer = viewerRef.current
     const headingDeg =
       viewer === null || viewer.isDestroyed() ? 0 : (viewer.camera.heading * 180) / Math.PI
     const azimuthDeg = (headingDeg + offsetDeg + 360) % 360
-    updateObserverPoint(movePointOnWGS84(observer, azimuthDeg, observerMoveStepM))
+    if (clickedGroundM === null) {
+      // Senza suolo di riferimento non c'è altezza dal suolo da conservare né
+      // un riallineamento sensato: come in T-037 si sposta a quota invariata
+      // (l'«Altezza dal suolo» resta «—» finché non si riposiziona col pick).
+      updateObserverPoint(movePointOnWGS84(clickedObserver, azimuthDeg, observerMoveStepM))
+      return
+    }
+    if (viewer === null || viewer.isDestroyed()) {
+      // Il campionamento del suolo richiede la scena 3D (ADR-019): senza
+      // viewer la misura non può partire e il punto non si sposta a cieco.
+      setObserverMoveNote('La scena 3D non è pronta: spostamento non applicato.')
+      return
+    }
+    const moved = movePointOnWGS84(clickedObserver, azimuthDeg, observerMoveStepM)
+    setObserverMoveBusy(true)
+    setObserverMoveNote(null)
+    try {
+      const sampler = createTerrainHeightSampler(viewer)
+      const heights = await sampler([moved])
+      if (observerRef.current !== clickedObserver) {
+        // L'Osservatore è cambiato per altra via durante l'attesa (pick, ±/
+        // input, Home, Reverse): lo spostamento richiesto non esiste più →
+        // scartato senza nota (la scelta attuale è quella più recente).
+        return
+      }
+      const groundM = heights[0] ?? null
+      if (groundM === null) {
+        setObserverMoveNote(
+          'Suolo non determinabile alla nuova posizione (acqua o mesh non ancora caricata): spostamento non applicato.',
+        )
+        return
+      }
+      // Altezza dal suolo conservata: la nuova quota è nuovo suolo + AGL attuale.
+      updateObserverPoint(
+        observerAtHeightAboveGround(
+          moved,
+          groundM,
+          observerHeightAboveGroundM(clickedObserver, clickedGroundM),
+        ),
+      )
+      setObserverGroundM(groundM)
+    } catch (error: unknown) {
+      console.error('Spostamento Observer: campionamento del suolo fallito:', error)
+      setObserverMoveNote(
+        error instanceof Error && error.message !== ''
+          ? `${error.message} Spostamento non applicato.`
+          : 'Campionamento del suolo non riuscito: spostamento non applicato.',
+      )
+    } finally {
+      setObserverMoveBusy(false)
+    }
   }
 
   /**
@@ -1025,34 +1097,49 @@ export default function App() {
               <div style={ROW_STYLE}>Sposta (rispetto alla direzione di vista):</div>
               <div style={OBSERVER_MOVE_ROW_STYLE}>
                 <button
-                  onClick={() => moveObserverViewRelative(270)}
+                  onClick={() => void moveObserverViewRelative(270)}
+                  disabled={observerMoveBusy}
                   style={BUTTON_STYLE}
-                  title="Sposta l'Observer a sinistra della direzione di vista; la vista segue il punto"
+                  title="Sposta l'Observer a sinistra della direzione di vista; la vista segue il punto. Prima il suolo alla nuova posizione viene misurato, poi il punto si sposta già appoggiato"
                 >
                   ◀ sinistra
                 </button>
                 <button
-                  onClick={() => moveObserverViewRelative(0)}
+                  onClick={() => void moveObserverViewRelative(0)}
+                  disabled={observerMoveBusy}
                   style={BUTTON_STYLE}
-                  title="Sposta l'Observer avanti nella direzione di vista; la vista segue il punto"
+                  title="Sposta l'Observer avanti nella direzione di vista; la vista segue il punto. Prima il suolo alla nuova posizione viene misurato, poi il punto si sposta già appoggiato"
                 >
                   ▲ avanti
                 </button>
                 <button
-                  onClick={() => moveObserverViewRelative(180)}
+                  onClick={() => void moveObserverViewRelative(180)}
+                  disabled={observerMoveBusy}
                   style={BUTTON_STYLE}
-                  title="Sposta l'Observer all'indietro rispetto alla direzione di vista; la vista segue il punto"
+                  title="Sposta l'Observer all'indietro rispetto alla direzione di vista; la vista segue il punto. Prima il suolo alla nuova posizione viene misurato, poi il punto si sposta già appoggiato"
                 >
                   ▼ indietro
                 </button>
                 <button
-                  onClick={() => moveObserverViewRelative(90)}
+                  onClick={() => void moveObserverViewRelative(90)}
+                  disabled={observerMoveBusy}
                   style={BUTTON_STYLE}
-                  title="Sposta l'Observer a destra della direzione di vista; la vista segue il punto"
+                  title="Sposta l'Observer a destra della direzione di vista; la vista segue il punto. Prima il suolo alla nuova posizione viene misurato, poi il punto si sposta già appoggiato"
                 >
                   ▶ destra
                 </button>
               </div>
+              {observerMoveBusy && (
+                <div
+                  style={ROW_STYLE}
+                  title="Prima misura su una zona non ancora vista: l'attesa dipende dal download dei tile necessari (timeout 60 s)."
+                >
+                  Misuro il suolo alla nuova posizione…
+                </div>
+              )}
+              {!observerMoveBusy && observerMoveNote !== null && (
+                <div style={ROW_STYLE}>{observerMoveNote}</div>
+              )}
               <div style={OBSERVER_HEIGHT_ROW_STYLE}>
                 <label style={ROW_STYLE}>
                   passo{' '}
