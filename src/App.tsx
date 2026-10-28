@@ -79,7 +79,7 @@ const TOOLBAR_STYLE = {
 // l'ID dell'ultimo task completato nel piano (docs/ai/TASKS.md), così l'umano
 // vede sul live fino a dove è arrivato lo sviluppo. Aggiornare la costante a
 // ogni task chiuso.
-const DEVELOPMENT_STATUS = 'T-064'
+const DEVELOPMENT_STATUS = 'T-066'
 
 // Distanza massima Observer↔Target esplorata dal Reverse Planner (T-060), in
 // metri: default 2 km (scala urbana, copertura dei Google 3D Tiles), editabile
