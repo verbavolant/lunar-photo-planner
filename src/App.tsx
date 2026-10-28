@@ -5,6 +5,15 @@ import CameraPovCard from './cesium/CameraPovCard'
 import { createTerrainHeightSampler } from './cesium/terrainSample'
 import type { TileLoadProgressSnapshot } from './cesium/tileLoadProgress'
 import { resolveTileQuality, type TileQualityLevel } from './cesium/tilesetPerformance'
+import type { SceneDataProvider } from './cesium/dataProvider'
+import {
+  clearUserApiKeys,
+  loadUserApiKeys,
+  loadUserProvider,
+  saveUserApiKeys,
+  saveUserProvider,
+  type UserApiKeys,
+} from './cesium/userKeys'
 import { flyToObserverView, flyToOverhead, moveCameraWithObserver } from './cesium/camera'
 import { moonTopocentric } from './astronomy/moon'
 import {
@@ -79,7 +88,7 @@ const TOOLBAR_STYLE = {
 // l'ID dell'ultimo task completato nel piano (docs/ai/TASKS.md), così l'umano
 // vede sul live fino a dove è arrivato lo sviluppo. Aggiornare la costante a
 // ogni task chiuso.
-const DEVELOPMENT_STATUS = 'T-038'
+const DEVELOPMENT_STATUS = 'T-072'
 
 // Distanza massima Observer↔Target esplorata dal Reverse Planner (T-060), in
 // metri: default 2 km (scala urbana, copertura dei Google 3D Tiles), editabile
@@ -262,6 +271,12 @@ const NUMBER_INPUT_STYLE = {
   width: 64,
 }
 
+// Campi del pannello «Chiavi API» (T-072): a tutta larghezza della card.
+const KEY_INPUT_STYLE = {
+  width: '100%',
+  boxSizing: 'border-box' as const,
+}
+
 // Riga dei controlli ±/input/passo dell'altezza dal suolo dell'Observer (T-035).
 const OBSERVER_HEIGHT_ROW_STYLE = {
   display: 'flex',
@@ -402,6 +417,26 @@ export default function App() {
       new URLSearchParams(window.location.search).get('tileQuality') ?? undefined,
     ).level,
   )
+  // Chiavi API dell'utilizzatore (T-072): inserite nel pannello «Chiavi API»,
+  // sovrascrivono le chiavi di build (VITE_* cotte nel bundle dai secret
+  // GitHub). Restano nel localStorage del browser.
+  const [userKeys, setUserKeys] = useState<UserApiKeys>(() =>
+    loadUserApiKeys(window.localStorage),
+  )
+  const [userProvider, setUserProvider] = useState<SceneDataProvider | undefined>(() =>
+    loadUserProvider(window.localStorage),
+  )
+  // Generazione della scena (T-072): le credenziali sono lette da
+  // CesiumViewer solo al mount → applicarle = rimontare il viewer usando
+  // questo contatore come key su <CesiumViewer>. Observer/Target/tempo restano
+  // intatti; solo la camera torna alla vista di partenza.
+  const [sceneGeneration, setSceneGeneration] = useState(0)
+  // Finestra «Chiavi API» (T-072): bozza dei campi + nota d'errore.
+  const [keysWindowOpen, setKeysWindowOpen] = useState(false)
+  const [keysGoogleInput, setKeysGoogleInput] = useState('')
+  const [keysIonInput, setKeysIonInput] = useState('')
+  const [keysProviderInput, setKeysProviderInput] = useState<SceneDataProvider | ''>('')
+  const [keysNote, setKeysNote] = useState<string | null>(null)
   // T-068: snapshot del caricamento dei tile del tileset di sessione (la % è
   // una stima, il conteggio pendente è esatto — ADR-021). null = nessun
   // evento ancora ricevuto: l'indicatore compare solo mentre c'è attività.
@@ -925,6 +960,58 @@ export default function App() {
     })
   }
 
+  // Finestra «Chiavi API» (T-072): si apre con le bozze uguali ai valori
+  // salvati, così i campi mostrano cosa c'è nel browser adesso.
+  function openKeysWindow(): void {
+    setKeysGoogleInput(userKeys.googleMapsApiKey)
+    setKeysIonInput(userKeys.cesiumIonToken)
+    setKeysProviderInput(userProvider ?? '')
+    setKeysNote(null)
+    setKeysWindowOpen(true)
+  }
+
+  /**
+   * Salva chiavi e provider dell'utilizzatore nel localStorage e ricrea la
+   * scena: CesiumViewer legge le credenziali solo al mount, quindi
+   * l'applicazione è un remount (sceneGeneration → key su <CesiumViewer>).
+   * Il tileset di sessione è ripartito per credenziale
+   * (resolveTilesetSessionKey): credenziale diversa → tileset nuovo.
+   */
+  function applyUserKeys(): void {
+    const keys: UserApiKeys = {
+      googleMapsApiKey: keysGoogleInput.trim(),
+      cesiumIonToken: keysIonInput.trim(),
+    }
+    try {
+      saveUserApiKeys(keys, window.localStorage)
+      saveUserProvider(keysProviderInput, window.localStorage)
+    } catch {
+      setKeysNote(
+        'Salvataggio nel browser non riuscito (localStorage non disponibile): le chiavi non sono state salvate.',
+      )
+      return
+    }
+    setUserKeys(keys)
+    setUserProvider(keysProviderInput === '' ? undefined : keysProviderInput)
+    setSceneGeneration((generation) => generation + 1)
+    setKeysWindowOpen(false)
+  }
+
+  /** Torna alle chiavi del sito: azzera il localStorage e ricrea la scena. */
+  function removeUserKeys(): void {
+    try {
+      clearUserApiKeys(window.localStorage)
+      saveUserProvider('', window.localStorage)
+    } catch {
+      setKeysNote('Pulizia dello storage non riuscita (localStorage non disponibile).')
+      return
+    }
+    setUserKeys({ googleMapsApiKey: '', cesiumIonToken: '' })
+    setUserProvider(undefined)
+    setSceneGeneration((generation) => generation + 1)
+    setKeysWindowOpen(false)
+  }
+
   return (
     <div style={ROOT_STYLE}>
       <div style={TOOLBAR_STYLE}>
@@ -1023,6 +1110,13 @@ export default function App() {
             Caricamento tiles: {tileLoad.percent}%
           </span>
         )}
+        <button
+          onClick={openKeysWindow}
+          style={BUTTON_STYLE}
+          title="Inserisci le tue chiavi API (chiave Google Maps e/o token Cesium ion): restano in questo browser, sovrascrivono quelle del sito e si applicano ricreando la scena"
+        >
+          Chiavi API
+        </button>
         <button
           onClick={openManualeWindow}
           style={BUTTON_STYLE}
@@ -1475,9 +1569,102 @@ export default function App() {
               ))}
             </div>
           )}
+          {keysWindowOpen && (
+            <div style={ALIGNMENT_WINDOW_STYLE}>
+              <div style={WINDOW_HEADER_STYLE}>
+                <span>Chiavi API</span>
+                <button
+                  onClick={() => setKeysWindowOpen(false)}
+                  style={BUTTON_STYLE}
+                  title="Chiude la finestra"
+                >
+                  ×
+                </button>
+              </div>
+              <div style={ROW_STYLE}>
+                In uso:{' '}
+                <strong>
+                  {userKeys.googleMapsApiKey !== '' ||
+                  userKeys.cesiumIonToken !== '' ||
+                  userProvider !== undefined
+                    ? 'configurazione tua (questo browser)'
+                    : 'chiavi del sito (build)'}
+                </strong>
+              </div>
+              <div style={ROW_STYLE}>
+                Le chiavi qui sotto sovrascrivono quelle del sito e restano nel localStorage di
+                questo browser: vengono usate solo verso Google e Cesium ion.
+              </div>
+              <label style={PARAM_LABEL_STYLE}>
+                Google Maps API key (provider «google»)
+                <input
+                  type="password"
+                  value={keysGoogleInput}
+                  onChange={(event) => setKeysGoogleInput(event.target.value)}
+                  style={KEY_INPUT_STYLE}
+                  autoComplete="off"
+                  spellCheck={false}
+                  title="Chiave della Map Tiles API (console Google Cloud): usata quando il provider è «google»"
+                />
+              </label>
+              <label style={PARAM_LABEL_STYLE}>
+                Token Cesium ion (provider «google-ion»)
+                <input
+                  type="password"
+                  value={keysIonInput}
+                  onChange={(event) => setKeysIonInput(event.target.value)}
+                  style={KEY_INPUT_STYLE}
+                  autoComplete="off"
+                  spellCheck={false}
+                  title="Token da ion.cesium.com/tokens con l'asset Google Photorealistic 3D Tiles abilitato: usato quando il provider è «google-ion»"
+                />
+              </label>
+              <label style={PARAM_LABEL_STYLE}>
+                Provider della scena
+                <select
+                  value={keysProviderInput}
+                  onChange={(event) =>
+                    setKeysProviderInput(event.target.value as SceneDataProvider | '')
+                  }
+                  title="Sovrascrive il provider di default del sito; ?provider= nell'URL ha comunque la priorità"
+                >
+                  <option value="">Come da sito / URL</option>
+                  <option value="google">Google diretto (la tua chiave)</option>
+                  <option value="google-ion">Cesium ion (il tuo token)</option>
+                </select>
+              </label>
+              <div style={WINDOW_PARAMS_STYLE}>
+                <button
+                  onClick={applyUserKeys}
+                  style={BUTTON_STYLE}
+                  title="Salva le chiavi e la scelta di provider in questo browser e ricrea la scena con le nuove credenziali"
+                >
+                  Salva e applica
+                </button>
+                <button
+                  onClick={removeUserKeys}
+                  style={BUTTON_STYLE}
+                  disabled={
+                    userKeys.googleMapsApiKey === '' &&
+                    userKeys.cesiumIonToken === '' &&
+                    userProvider === undefined
+                  }
+                  title="Rimuove chiavi e provider salvati in questo browser: tornano in uso le chiavi del sito"
+                >
+                  Rimuovi le mie chiavi
+                </button>
+              </div>
+              {keysNote !== null && <div style={ROW_STYLE}>{keysNote}</div>}
+              <div style={ROW_STYLE}>
+                «Salva e applica» ricrea la scena: la camera torna alla vista di partenza,
+                Observer/Target e orario restano dove sono.
+              </div>
+            </div>
+          )}
         </div>
         <div style={VIEW_CONTAINER_STYLE}>
           <CesiumViewer
+            key={sceneGeneration}
             observer={observer}
             target={target}
             time={effectiveDate}

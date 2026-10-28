@@ -49,22 +49,37 @@ function invalidWarningFor(value: string | undefined): string | null {
 }
 
 /**
- * Risolve il provider della scena: la query `?provider=` ha priorità sull'env
- * (permette di cambiare sorgente sul sito già deployato senza rebuild), l'env
- * ha priorità sul default 'google'. Il default resta 'google' per non
- * cambiare il comportamento del sito deployato finché il secret CI
- * VITE_CESIUM_ION_TOKEN non è impostato (T-031): per eliminare il 429 in
- * produzione impostare `VITE_SCENE_PROVIDER=google-ion` + il secret. I valori
- * vuoti sono "non impostati"; quelli presenti ma non validi ricadono sul
- * valore valido successivo e producono un avviso.
+ * Risolve il provider della scena: la query `?provider=` ha priorità su tutto
+ * (permette di cambiare sorgente sul sito già deployato senza rebuild), poi
+ * viene la scelta salvata dall'utilizzatore nel pannello «Chiavi API»
+ * (T-072, localStorage), poi l'env, poi il default 'google'. Il default resta
+ * 'google' per non cambiare il comportamento del sito deployato finché il
+ * secret CI VITE_CESIUM_ION_TOKEN non è impostato (T-031): per eliminare il
+ * 429 in produzione impostare `VITE_SCENE_PROVIDER=google-ion` + il secret.
+ * I valori vuoti sono "non impostati"; quelli presenti ma non validi ricadono
+ * sul valore valido successivo e producono un avviso. La scelta dell'utente
+ * arriva già validata da `loadUserProvider` (mai 'cesium', mai altro).
  */
 export function resolveSceneDataProvider(
   envValue: string | undefined,
   queryValue: string | undefined,
+  userChoice?: SceneDataProvider | undefined,
 ): ResolvedSceneProvider {
   const fromQuery = parseProvider(queryValue)
   if (fromQuery !== null) {
     return { provider: fromQuery, invalidWarning: invalidWarningFor(envValue) }
+  }
+  // T-072: scelta dell'utilizzatore (pannello «Chiavi API», localStorage) —
+  // scavalca l'env di build ma non la query ?provider=. Come nelle altre
+  // diramazioni si segnalano i valori configurati ma ignorati.
+  if (userChoice !== undefined) {
+    const ignoredWarnings = [invalidWarningFor(envValue), invalidWarningFor(queryValue)].filter(
+      (warning) => warning !== null,
+    )
+    return {
+      provider: userChoice,
+      invalidWarning: ignoredWarnings.length === 0 ? null : ignoredWarnings.join(' '),
+    }
   }
   const fromEnv = parseProvider(envValue)
   if (fromEnv !== null) {

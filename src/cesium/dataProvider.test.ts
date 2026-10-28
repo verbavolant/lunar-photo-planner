@@ -65,4 +65,33 @@ describe('resolveSceneDataProvider', () => {
     expect(resolved.invalidWarning).toContain('google-ion')
     expect(resolved.invalidWarning).toContain('cesium')
   })
+
+  it('T-072: la scelta dell\u2019utente (pannello Chiavi API) ha priorità sull\u2019env', () => {
+    expect(resolveSceneDataProvider('google', undefined, 'google-ion').provider).toBe('google-ion')
+    expect(resolveSceneDataProvider('google-ion', undefined, 'google').provider).toBe('google')
+  })
+
+  it('T-072: la query ?provider= ha priorità sulla scelta dell\u2019utente', () => {
+    expect(resolveSceneDataProvider(undefined, 'google', 'google-ion').provider).toBe('google')
+    expect(resolveSceneDataProvider('google', 'google-ion', 'google').provider).toBe('google-ion')
+  })
+
+  it('T-072: scelta utente valida + query non valida → vince l\u2019utente, avviso cita la query', () => {
+    const resolved = resolveSceneDataProvider(undefined, 'bogus', 'google')
+    expect(resolved.provider).toBe('google')
+    expect(resolved.invalidWarning).toContain('bogus')
+  })
+
+  it('T-072: env non valida scavalcata dalla scelta utente, avviso cita l\u2019env', () => {
+    const resolved = resolveSceneDataProvider('tile-openstreetmap', undefined, 'google-ion')
+    expect(resolved.provider).toBe('google-ion')
+    expect(resolved.invalidWarning).toContain('tile-openstreetmap')
+  })
+
+  it('T-072: scelta utente senza query né env → nessun avviso', () => {
+    expect(resolveSceneDataProvider(undefined, undefined, 'google')).toEqual({
+      provider: 'google',
+      invalidWarning: null,
+    })
+  })
 })

@@ -65,8 +65,8 @@
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
 │ BARRETTA COMANDI  Osservatore · Target · Azzera · Vai a Home ·           │
-│    Imposta come Home · Vista Luna · Sopra Observer · 100 m ·             │
-│    Cerca allineamenti Luna · Cerca luogo per il Target    Sviluppo: T-038│
+│    Imposta come Home · Vista Luna · Sopra Observer · 100 m · Chiavi API  │
+│    Cerca allineamenti Luna · Cerca luogo per il Target    Sviluppo: T-072│
 ├───────────────────────────┬──────────────────────────────────────────────┤
 │ BOX LATERALE (≈380 px)    │                                              │
 │  • POV camera             │            SCENA 3D                          │
@@ -150,9 +150,10 @@ Premi **`Vista Luna`**: la camera si mette 1 m sopra l'Osservatore, rivolta vers
 | `Cerca allineamenti Luna` | apre la finestra di ricerca degli allineamenti | disabilitato se mancano Osservatore o Target |
 | «Qualità tiles» (menu) | sceglie quanto dettaglio caricare nella mesh 3D: `Alta`, `Media` (default), `Eco` | si applica **a caldo**, senza ricaricare la scena; quote e occlusione non cambiano col livello ([§9](#9-parametri-nellurl-provider-tilemaxm-tilequality)) |
 | «Caricamento tiles: N%» (testo, compare solo mentre i tile arrivano) | mostra l'avanzamento del caricamento della mesh 3D; sparisce a caricamento concluso | la percentuale è una **stima**: CesiumJS non espone il totale dei tile da caricare (il conteggio delle richieste in corso è esatto); dettagli in [§9](#9-parametri-nellurl-provider-tilemaxm-tilequality) |
+| `Chiavi API` | apre la finestra per inserire **le tue chiavi** (chiave Google Maps e/o token Cesium ion) e scegliere il provider della scena: sovrascrivono le chiavi configurate nel sito | i valori restano nel `localStorage` di questo browser; «Salva e applica» ricrea la scena; `?provider=` nell'URL ha priorità sulla scelta salvata ([§6.10](#610-finestra-chiavi-api), [§9](#9-parametri-nellurl-provider-tilemaxm-tilequality)) |
 | `Manuale` | apre questo manuale in una **finestra separata**, formattato in HTML | il contenuto è `MANUALE.md` alla root del repository; i collegamenti ai file del repo (es. `README.md`) portano a GitHub |
 
-A destra della barra, oltre ai pulsanti: **`Sviluppo: T-038`** — l'ID dell'ultimo task completato nel piano di sviluppo del progetto; si aggiorna a ogni task chiuso. L'orario in uso non sta qui: è nella card Tempo, accanto allo slider ([§6.7](#67-card-tempo-fascia-in-basso-tutta-larghezza)).
+A destra della barra, oltre ai pulsanti: **`Sviluppo: T-072`** — l'ID dell'ultimo task completato nel piano di sviluppo del progetto; si aggiorna a ogni task chiuso. L'orario in uso non sta qui: è nella card Tempo, accanto allo slider ([§6.7](#67-card-tempo-fascia-in-basso-tutta-larghezza)).
 
 > **Il punto attivo comanda il clic sulla scena.** Se dopo aver posizionato il Target lasci `Target` selezionato e clicchi sulla scena, sposti il **Target**, non l'Osservatore. Controlla quale dei due pulsanti è evidenziato.
 
@@ -347,6 +348,24 @@ Com'è fatto il calcolo, e cosa **non** è:
 - **Le quote sono ellissoideali** (vedi [§12](#12-limitazioni-dichiarate-e-precisione)): margini di pochi metri vanno presi come indicativi.
 - L'analisi riparte (con un breve ritardo di assestamento) a ogni spostamento di Observer o Target e **non dipende da data/ora**: la linea di vista non cambia con il tempo, cambia solo la Luna sopra di essa.
 
+### 6.10 Finestra "Chiavi API"
+
+Aperta dal pulsante `Chiavi API` della barra comandi. Serve a chi usa il sito per mettere le **proprie** credenziali al posto di quelle configurate da chi lo ospita: utile quando la quota del sito è esaurita (avvisi 429, piano ion esaurito) o quando preferisci consumare la tua quota invece di quella altrui.
+
+| Campo | Cosa fa |
+|---|---|
+| `Google Maps API key` | chiave della **Map Tiles API** (console Google Cloud): usata quando il provider è `google` |
+| `Token Cesium ion` | token da <https://ion.cesium.com/tokens> con l'asset **Google Photorealistic 3D Tiles** (asset 2275207) abilitato: usato quando il provider è `google-ion` |
+| `Provider della scena` | sovrascrive il provider di default del sito: `Come da sito / URL` (predefinito), `Google diretto (la tua chiave)`, `Cesium ion (il tuo token)` |
+
+Comportamento:
+
+- **Priorità:** `?provider=` nell'URL > scelta salvata nel pannello > impostazione del sito. Le chiavi del pannello sovrascrivono invece sempre quelle della build, per il provider attivo.
+- **`Salva e applica`** salva i valori nel `localStorage` di questo browser e **ricrea la scena**: la camera torna alla vista di partenza, mentre Observer, Target e orario restano dove sono. Se la credenziale è cambiata, il tileset riparte da zero (nuova root request).
+- **`Rimuovi le mie chiavi`** azzera il localStorage e torna alle chiavi del sito (attivo solo se hai salvato qualcosa).
+- **Privacy:** le chiavi non escono mai da questo browser e vengono usate solo verso i provider (Google, Cesium ion); nessun backend.
+- Una credenziale rifiutata dal provider produce l'avviso consueto ([§11.1](#111-gli-avvisi-compaiono-centrati-in-alto-sulla-scena)) e la scena resta sul globo: controlla che la chiave abbia la Map Tiles API abilitata (o il token l'asset Google 3D Tiles) e le restrizioni referrer giuste per il dominio del sito.
+
 ## 7. Leggere i numeri (con esempi)
 
 > I valori negli esempi sono **ipotesi illustrative**: nel tuo caso leggi i numeri veri nella card **Dati**.
@@ -468,6 +487,8 @@ https://verbavolant.github.io/lunar-photo-planner/?provider=google-ion&tileMaxM=
 
 Se il sito pubblico non carica la mesh, provare `?provider=google-ion` è il primo tentativo utile (funziona solo se chi ospita ha configurato il token). Un valore non riconosciuto produce un avviso a schermo e il ritorno al default.
 
+La scelta di provider salvata nel pannello **«Chiavi API»** ([§6.10](#610-finestra-chiavi-api)) sta tra il parametro `?provider=` e il default del sito: l'URL vince sempre. Le chiavi inserite nel pannello sovrascrivono invece sempre quelle con cui il sito è stato compilato.
+
 **`tileMaxM`.** Non è un taglio netto: oltre la distanza scelta i tile restano al livello di dettaglio del "genitore" (degradazione progressiva), così non si formano buchi. Utile:
 
 - `?tileMaxM=500` su connessioni lente o per navigare velocemente;
@@ -521,8 +542,8 @@ Senza chiave o token l'app resta utilizzabile: si naviga sul globo e si posizion
 |---|---|---|
 | `Limite di richieste <sorgente> raggiunto (429). La scena resta sulla vista base senza mesh 3D; nuovo tentativo automatico tra 30 s (tentativo 2 di 4).` | il provider dei tile ha risposto **429 / rate limit**. L'app **non** riprova subito: riprova dopo 30 s, poi 2 min, poi 10 min | aspetta senza ricaricare; intanto puoi lavorare sul globo (misure e calcoli funzionano lo stesso) |
 | `Limite di richieste <sorgente> raggiunto (429). … nessun altro tentativo in questa sessione: ricarica la pagina per riprovare.` | esauriti i 4 tentativi | **ricarica la pagina** (F5). Se sei sul sito pubblico e succede spesso, prova `?provider=google-ion` ([§9](#9-parametri-nellurl-provider-tilemaxm-tilequality)) |
-| `Google Photorealistic 3D Tiles non attivi: imposta VITE_GOOGLE_MAPS_API_KEY in .env.local e riavvia il server di sviluppo.` | esecuzione locale con provider `google` e chiave assente | configura la chiave come in [§10](#10-eseguire-lapp-in-locale) |
-| `Provider "google-ion" attivo ma senza token ion: imposta VITE_CESIUM_ION_TOKEN in .env.local (token da https://ion.cesium.com/tokens) e riavvia il server di sviluppo.` | provider `google-ion` senza token | configura il token ion (o, sul sito pubblico, segnalalo a chi lo ospita) |
+| `Google Photorealistic 3D Tiles non attivi: imposta VITE_GOOGLE_MAPS_API_KEY in .env.local, oppure inserisci la tua chiave nel pannello «Chiavi API».` | provider `google` senza chiave (build locale o sito) | configura la chiave come in [§10](#10-eseguire-lapp-in-locale), oppure inseriscila dal pannello ([§6.10](#610-finestra-chiavi-api)) |
+| `Provider "google-ion" attivo ma senza token ion: imposta VITE_CESIUM_ION_TOKEN in .env.local, oppure inserisci il tuo token nel pannello «Chiavi API» (token da https://ion.cesium.com/tokens).` | provider `google-ion` senza token | configura il token come in [§10](#10-eseguire-lapp-in-locale), inseriscilo dal pannello ([§6.10](#610-finestra-chiavi-api)), o segnala a chi ospita |
 | `Errore nel caricamento di <sorgente>: <dettaglio>.` | errore di rete/blocco del provider (non 429) | verifica la connessione, disattiva estensioni che bloccano le richieste, ricarica |
 | `Provider non valido: "xyz" (valori ammessi: google, google-ion (alias: cesium)).` | `?provider=` scritto male | correggi o rimuovi il parametro |
 | `Parametro "tileMaxM" non valido: "abc" (atteso un numero di metri > 0).` | `?tileMaxM=` non numerico o ≤ 0 | correggi; intanto vale il default 1000 m |
@@ -575,9 +596,9 @@ Sono i limiti **noti e voluti** dell'attuale release, non bug da segnalare:
 
 - **Attribution obbligatoria:** i crediti mostrati in basso a destra (Cesium ion e Google) sono un requisito dei termini dei provider e restano sempre visibili.
 - **Piano Cesium ion:** il sito usa un account ion; il piano *Community* gratuito è per uso **individuale non commerciale** e ha una quota mensile di streaming. Se vedi blocchi ricorrenti, può essere stata esaurita quella quota.
-- **Nessun backend, nessun account:** l'app è un sito statico e **non** invia i tuoi punti da nessuna parte: chiudendo o ricaricando la pagina, la pianificazione va persa. Unica cosa scritta nel browser: la **Home dell'Osservatore**, solo se premi `Imposta come Home` (localStorage; resta finché non la sovrascrivi o cancelli i dati del sito). Nessun cookie, nessuna geolocalizzazione.
+- **Nessun backend, nessun account:** l'app è un sito statico e **non** invia i tuoi punti da nessuna parte: chiudendo o ricaricando la pagina, la pianificazione va persa. Cose scritte nel browser (localStorage, solo su tua azione): la **Home dell'Osservatore** (`Imposta come Home`) e le **chiavi API** del pannello «Chiavi API» ([§6.10](#610-finestra-chiavi-api)); entrambe restano finché non le sovrascrivi/rimuovi o cancelli i dati del sito, e le chiavi vengono usate solo verso Google e Cesium ion. Nessun cookie, nessuna geolocalizzazione.
 - **Cosa esce dal tuo dispositivo:** richieste verso Cesium ion/`api.cesium.com` e verso i server dei tile 3D per scaricare la scena, come per qualsiasi mappa 3D.
-- **Per chi ospita l'app:** le chiavi vanno protette con restrizioni HTTP referrer lato Google Cloud e i segreti (chiave Google, token ion) vanno solo nei secret di build, mai nel codice e mai nei log. La chiave browser finisce nel bundle JavaScript: è normale, la difesa è la restrizione del referrer.
+- **Per chi ospita l'app:** le chiavi vanno protette con restrizioni HTTP referrer lato Google Cloud e i segreti (chiave Google, token ion) vanno solo nei secret di build, mai nel codice e mai nei log. La chiave browser finisce nel bundle JavaScript: è normale, la difesa è la restrizione del referrer. Chi usa il sito può comunque inserire le proprie chiavi dal pannello «Chiavi API» e bypassare quelle della build ([§6.10](#610-finestra-chiavi-api)): utile quando la quota del sito è esaurita.
 
 ---
 

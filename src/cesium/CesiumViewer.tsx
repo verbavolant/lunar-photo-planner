@@ -26,6 +26,12 @@ import {
   type TileQualityLevel,
 } from './tilesetPerformance'
 import { acquireSessionTileset, markSessionTilesetDetached } from './tilesetSession'
+import {
+  loadUserApiKeys,
+  loadUserProvider,
+  resolveEffectiveCredential,
+  resolveTilesetSessionKey,
+} from './userKeys'
 import { createMoonTexture, moonDiameterM, moonPositionEcef } from './moonRender'
 import { moonTopocentric, type MoonTopocentric } from '../astronomy/moon'
 import type { GeoPoint } from '../geodesy/geodesy'
@@ -62,7 +68,8 @@ export interface CesiumViewerProps {
 
 // URL root dei Photorealistic 3D Tiles: sample ufficiale Google
 // (developers.google.com/maps/documentation/tile/3d-tiles, agg. 2026-10-05).
-// La chiave non va mai hardcodata: arriva da VITE_GOOGLE_MAPS_API_KEY.
+// La chiave non va mai hardcodata: arriva da VITE_GOOGLE_MAPS_API_KEY oppure
+// dalla chiave inserita dall'utilizzatore nel pannello «Chiavi API» (T-072).
 // T-040: usato SOLO dal provider 'google' (opt-in) — ogni root request
 // consuma la quota Google per progetto ("3D Tiles root requests per minute"
 // = 150), fonte dell'errore 429 RATE_LIMIT_EXCEEDED che ha motivato il
@@ -248,12 +255,18 @@ export default function CesiumViewer({
     // Evita di toccare il viewer dopo l'unmount (StrictMode: doppio mount).
     let disposed = false
 
+    // T-072: chiavi dell'utilizzatore (localStorage, pannello «Chiavi API»):
+    // hanno priorità sulle chiavi di build (VITE_*), che restano il fallback.
+    const userKeys = loadUserApiKeys(window.localStorage)
+
     // Fase 5b: sorgente dati 3D configurabile. Default dall'env
-    // (VITE_SCENE_PROVIDER), override runtime con ?provider= per cambiare
-    // sorgente sul sito già deployato senza rebuild.
+    // (VITE_SCENE_PROVIDER), poi la scelta salvata nel pannello «Chiavi API»
+    // (T-072), poi override runtime con ?provider= per cambiare sorgente sul
+    // sito già deployato senza rebuild.
     const sceneProvider = resolveSceneDataProvider(
       import.meta.env.VITE_SCENE_PROVIDER as string | undefined,
       new URLSearchParams(window.location.search).get('provider') ?? undefined,
+      loadUserProvider(window.localStorage),
     )
     if (sceneProvider.invalidWarning !== null) {
       setNotice(sceneProvider.invalidWarning)
@@ -282,13 +295,17 @@ export default function CesiumViewer({
     // Ramo 'google-ion': il token ion va impostato prima di ogni richiesta
     // ion (`Cesium3DTileset.fromIonAssetId` lo legge internamente). Senza
     // token la scena resta sulla vista base, con l'avviso a schermo.
-    const ionToken = import.meta.env.VITE_CESIUM_ION_TOKEN as string | undefined
+    // T-072: il token dell'utilizzatore (pannello «Chiavi API») ha priorità.
+    const ionToken = resolveEffectiveCredential(
+      import.meta.env.VITE_CESIUM_ION_TOKEN as string | undefined,
+      userKeys.cesiumIonToken,
+    )
     const ionProviderActive = sceneProvider.provider === 'google-ion'
     const ionConfigured = ionProviderActive && ionToken !== undefined && ionToken !== ''
     if (ionProviderActive) {
       if (!ionConfigured) {
         setNotice(
-          'Provider "google-ion" attivo ma senza token ion: imposta VITE_CESIUM_ION_TOKEN in .env.local (token da https://ion.cesium.com/tokens) e riavvia il server di sviluppo.',
+          'Provider "google-ion" attivo ma senza token ion: imposta VITE_CESIUM_ION_TOKEN in .env.local, oppure inserisci il tuo token nel pannello «Chiavi API» (token da https://ion.cesium.com/tokens).',
         )
       } else {
         Ion.defaultAccessToken = ionToken
@@ -397,7 +414,11 @@ export default function CesiumViewer({
     // non partiva mai: le zone mai visualizzate restavano senza quota
     // («non determinabile») invece di essere scaricate.
     let attachedTileset: Cesium3DTileset | null = null
-    const sessionKey = sceneProvider.provider
+    // T-072: la chiave di sessione include il fingerprint della credenziale
+    // effettiva (assegnata qui sotto nel ramo attivo): credenziale diversa →
+    // tileset nuovo (la chiave viaggia nella root request), identica → riuso
+    // dell'istanza di sessione come prima (T-040).
+    let sessionKey: string = sceneProvider.provider
     const sessionLabel =
       sessionKey === 'google'
         ? 'Google Photorealistic 3D Tiles (Map Tiles API diretta)'
@@ -410,12 +431,16 @@ export default function CesiumViewer({
       // DIRETTA con la chiave dell'utente. Ogni root request consuma la quota
       // Google per progetto (150/min, fonte dell'errore 429 di T-040):
       // restare qui solo per confronto/debug.
-      const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined
+      const apiKey = resolveEffectiveCredential(
+        import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined,
+        userKeys.googleMapsApiKey,
+      )
       if (apiKey === undefined || apiKey === '') {
         setNotice(
-          'Google Photorealistic 3D Tiles non attivi: imposta VITE_GOOGLE_MAPS_API_KEY in .env.local e riavvia il server di sviluppo.',
+          'Google Photorealistic 3D Tiles non attivi: imposta VITE_GOOGLE_MAPS_API_KEY in .env.local, oppure inserisci la tua chiave nel pannello «Chiavi API».',
         )
       } else {
+        sessionKey = resolveTilesetSessionKey(sceneProvider.provider, apiKey)
         acquireSessionTileset({
           sessionKey,
           label: sessionLabel,
@@ -472,6 +497,7 @@ export default function CesiumViewer({
       // il caricamento fallisce il globo resta visibile (fallback navigabile)
       // con l'avviso a schermo. I credit Google/ion restano a schermo:
       // requisito dei provider dei dati.
+      sessionKey = resolveTilesetSessionKey(sceneProvider.provider, ionToken)
       acquireSessionTileset({
         sessionKey,
         label: sessionLabel,
