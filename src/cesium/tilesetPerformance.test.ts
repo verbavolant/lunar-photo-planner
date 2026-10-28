@@ -172,10 +172,10 @@ describe('applyTilesetQuality', () => {
 })
 
 describe('resolveTileQuality', () => {
-  it('assente/vuoto → default eco (decisione umano 2026-10-21), nessun avviso', () => {
-    expect(DEFAULT_TILE_QUALITY).toBe('eco')
-    expect(resolveTileQuality(undefined)).toEqual({ level: 'eco', invalidWarning: null })
-    expect(resolveTileQuality('')).toEqual({ level: 'eco', invalidWarning: null })
+  it('assente/vuoto → default media (decisione umano 2026-10-28, T-071), nessun avviso', () => {
+    expect(DEFAULT_TILE_QUALITY).toBe('media')
+    expect(resolveTileQuality(undefined)).toEqual({ level: 'media', invalidWarning: null })
+    expect(resolveTileQuality('')).toEqual({ level: 'media', invalidWarning: null })
   })
 
   it('valori validi, normalizzati trim/minuscole come il provider', () => {
@@ -184,9 +184,9 @@ describe('resolveTileQuality', () => {
     expect(resolveTileQuality('ECO')).toEqual({ level: 'eco', invalidWarning: null })
   })
 
-  it('valore non valido → default eco + avviso che cita il valore e i valori ammessi', () => {
+  it('valore non valido → default media + avviso che cita il valore e i valori ammessi', () => {
     const resolved = resolveTileQuality('ultra')
-    expect(resolved.level).toBe('eco')
+    expect(resolved.level).toBe('media')
     expect(resolved.invalidWarning).toContain('tileQuality')
     expect(resolved.invalidWarning).toContain('ultra')
     expect(resolved.invalidWarning).toContain('alta')

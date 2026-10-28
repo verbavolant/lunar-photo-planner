@@ -131,8 +131,8 @@ export function resolveTileMaxDetailDistanceM(
 /** Livelli selezionabili (selettore UI in barra comandi e `?tileQuality=`). */
 export type TileQualityLevel = 'alta' | 'media' | 'eco'
 
-/** Default scelto dall'umano (2026-10-21): Eco, massima economia di tile. */
-export const DEFAULT_TILE_QUALITY: TileQualityLevel = 'eco'
+/** Default scelto dall'umano (2026-10-28, T-071): Media. Prima Eco (2026-10-21). */
+export const DEFAULT_TILE_QUALITY: TileQualityLevel = 'media'
 
 interface TileQualityPreset {
   maximumScreenSpaceError: number

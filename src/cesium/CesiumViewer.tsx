@@ -425,7 +425,7 @@ export default function CesiumViewer({
               showCreditsOnScreen: true,
               // T-039: dettaglio limitato alla distanza scelta (?tileMaxM=).
               ...tilesetPerformanceOptions(tileMaxM.maxDetailDistanceM),
-              // T-067: livello qualità iniziale (?tileQuality=, default Eco).
+              // T-067: livello qualità iniziale (?tileQuality=, default Media).
               ...tilesetQualityOptions(tileQualityRef.current),
             }),
           onNotice: setNotice,
@@ -483,7 +483,7 @@ export default function CesiumViewer({
             showCreditsOnScreen: true,
             // T-039: dettaglio limitato alla distanza scelta (?tileMaxM=).
             ...tilesetPerformanceOptions(tileMaxM.maxDetailDistanceM),
-            // T-067: livello qualità iniziale (?tileQuality=, default Eco).
+            // T-067: livello qualità iniziale (?tileQuality=, default Media).
             ...tilesetQualityOptions(tileQualityRef.current),
           }),
         onNotice: setNotice,

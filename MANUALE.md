@@ -66,7 +66,7 @@
 ┌──────────────────────────────────────────────────────────────────────────┐
 │ BARRETTA COMANDI  Osservatore · Target · Azzera · Vai a Home ·           │
 │    Imposta come Home · Vista Luna · Sopra Observer · 100 m ·             │
-│    Cerca allineamenti Luna · Cerca luogo per il Target    Sviluppo: T-066│
+│    Cerca allineamenti Luna · Cerca luogo per il Target    Sviluppo: T-071│
 ├───────────────────────────┬──────────────────────────────────────────────┤
 │ BOX LATERALE (≈380 px)    │                                              │
 │  • POV camera             │            SCENA 3D                          │
@@ -148,11 +148,11 @@ Premi **`Vista Luna`**: la camera si mette 1 m sopra l'Osservatore, rivolta vers
 | `Vista Luna` | camera **1 m sopra l'Osservatore**, orientata con azimut = azimut della Luna e inclinazione = altitudine della Luna (volo animato di 2 s) | richiede l'Osservatore. È la posa del fotografo: da qui vedi la Luna dove la vedrai davvero |
 | `Sopra Observer · 100 m` | vista dall'alto 100 m sopra l'Osservatore, puntato su di lui, nord in alto | disabilitato finché l'Osservatore non è posizionato |
 | `Cerca allineamenti Luna` | apre la finestra di ricerca degli allineamenti | disabilitato se mancano Osservatore o Target |
-| «Qualità tiles» (menu) | sceglie quanto dettaglio caricare nella mesh 3D: `Alta`, `Media`, `Eco` (default) | si applica **a caldo**, senza ricaricare la scena; quote e occlusione non cambiano col livello ([§9](#9-parametri-nellurl-provider-tilemaxm-tilequality)) |
+| «Qualità tiles» (menu) | sceglie quanto dettaglio caricare nella mesh 3D: `Alta`, `Media` (default), `Eco` | si applica **a caldo**, senza ricaricare la scena; quote e occlusione non cambiano col livello ([§9](#9-parametri-nellurl-provider-tilemaxm-tilequality)) |
 | «Caricamento tiles: N%» (testo, compare solo mentre i tile arrivano) | mostra l'avanzamento del caricamento della mesh 3D; sparisce a caricamento concluso | la percentuale è una **stima**: CesiumJS non espone il totale dei tile da caricare (il conteggio delle richieste in corso è esatto); dettagli in [§9](#9-parametri-nellurl-provider-tilemaxm-tilequality) |
 | `Manuale` | apre questo manuale in una **finestra separata**, formattato in HTML | il contenuto è `MANUALE.md` alla root del repository; i collegamenti ai file del repo (es. `README.md`) portano a GitHub |
 
-A destra della barra, oltre ai pulsanti: **`Sviluppo: T-066`** — l'ID dell'ultimo task completato nel piano di sviluppo del progetto; si aggiorna a ogni task chiuso. L'orario in uso non sta qui: è nella card Tempo, accanto allo slider ([§6.7](#67-card-tempo-fascia-in-basso-tutta-larghezza)).
+A destra della barra, oltre ai pulsanti: **`Sviluppo: T-071`** — l'ID dell'ultimo task completato nel piano di sviluppo del progetto; si aggiorna a ogni task chiuso. L'orario in uso non sta qui: è nella card Tempo, accanto allo slider ([§6.7](#67-card-tempo-fascia-in-basso-tutta-larghezza)).
 
 > **Il punto attivo comanda il clic sulla scena.** Se dopo aver posizionato il Target lasci `Target` selezionato e clicchi sulla scena, sposti il **Target**, non l'Osservatore. Controlla quale dei due pulsanti è evidenziato.
 
@@ -459,7 +459,7 @@ https://verbavolant.github.io/lunar-photo-planner/?provider=google-ion&tileMaxM=
 |---|---|---|---|
 | `provider` | `google`, `google-ion` (alias accettato: `cesium`) | `google` | sceglie da dove arrivano i tile 3D fotorealistici |
 | `tileMaxM` | numero di metri > 0 | `1000` | distanza oltre la quale il dettaglio dei tile viene ridotto: valori piccoli = caricamento più leggero, valori grandi = più nitidezza in lontananza (e più dati) |
-| `tileQuality` | `alta`, `media`, `eco` | `eco` | quanto dettaglio caricare nella mesh 3D: `alta` = massimo dettaglio, `media` = intermedio, `eco` = il minimo indispensabile (dimensioni e ingombri indicativi, massima economia di tile) |
+| `tileQuality` | `alta`, `media`, `eco` | `media` | quanto dettaglio caricare nella mesh 3D: `alta` = massimo dettaglio, `media` = intermedio, `eco` = il minimo indispensabile (dimensioni e ingombri indicativi, massima economia di tile) |
 
 **`provider`.** Le due sorgenti sono la **stessa mesh** fotorealistica di Google, con percorso diverso:
 
@@ -478,12 +478,12 @@ Un valore non numerico o ≤ 0 viene ignorato con avviso e si torna a 1000 m.
 **`tileQuality`.** Regola quanto dettaglio caricare nella mesh. Il menu **«Qualità tiles»** nella barra comandi cambia livello **a caldo**, senza ricaricare la scena; il parametro URL fissa invece il livello di **partenza**:
 
 - `alta` → dettaglio pieno (il comportamento "di serie" di CesiumJS);
-- `media` → dettaglio intermedio;
-- `eco` → massima economia: bastano dimensioni e ingombri indicativi, non la resa fotografica (ed è il default).
+- `media` → dettaglio intermedio (ed è il default);
+- `eco` → massima economia: bastano dimensioni e ingombri indicativi, non la resa fotografica.
 
 Quote di suolo, altezza dal suolo e occlusione **non cambiano** col livello: sono misurate sul dato a massima risoluzione disponibile ([§6.9](#69-occlusione-della-linea-di-vista)), a prescindere da quanto dettaglio viene disegnato. Contropartita dei livelli economici: la cache dei tile è più piccola, quindi navigando a lungo nella stessa zona qualche tile può essere riscaricato.
 
-Un valore non riconosciuto produce un avviso a schermo e il ritorno a `eco`.
+Un valore non riconosciuto produce un avviso a schermo e il ritorno al default (`media`).
 
 **Indicatore «Caricamento tiles».** Mentre la mesh sta caricando, la barra comandi mostra `Caricamento tiles: N%` accanto al menu qualità; a caricamento concluso l'indicatore sparisce. La percentuale è una **stima**: l'API di CesiumJS non espone il numero totale di tile da caricare, quindi l'app calcola l'avanzamento sul picco di richieste osservato nella raffica in corso (il conteggio delle richieste pendenti è invece esatto). Serve a capire *quanto* sta arrivando, non come misura esatta.
 
@@ -526,7 +526,7 @@ Senza chiave o token l'app resta utilizzabile: si naviga sul globo e si posizion
 | `Errore nel caricamento di <sorgente>: <dettaglio>.` | errore di rete/blocco del provider (non 429) | verifica la connessione, disattiva estensioni che bloccano le richieste, ricarica |
 | `Provider non valido: "xyz" (valori ammessi: google, google-ion (alias: cesium)).` | `?provider=` scritto male | correggi o rimuovi il parametro |
 | `Parametro "tileMaxM" non valido: "abc" (atteso un numero di metri > 0).` | `?tileMaxM=` non numerico o ≤ 0 | correggi; intanto vale il default 1000 m |
-| `Parametro "tileQuality" non valido: "xyz" (valori ammessi: alta, media, eco).` | `?tileQuality=` scritto male | correggi o rimuovi il parametro; intanto vale `eco` |
+| `Parametro "tileQuality" non valido: "xyz" (valori ammessi: alta, media, eco).` | `?tileQuality=` scritto male | correggi o rimuovi il parametro; intanto vale `media` |
 | `Linea di vista indefinita: Observer e Target coincidono.` | hai cliccato lo stesso punto per entrambi | riposiziona uno dei due |
 | `Nessun allineamento nella finestra cercata.` | la Luna non passa entro la tolleranza nella finestra | allarga `Tolleranza (°)` o `Finestra (giorni)`, oppure cambia `Ricerca da` ([§8.3](#83-leggere-e-adottare-i-risultati)) |
 | Righe misure con `—` | valore non calcolabile (Observer e Target coincidenti, o quasi antipodali: la geodetica non converge) | allontana i due punti; a distanze intercontinentali alcune righe non sono disponibili |

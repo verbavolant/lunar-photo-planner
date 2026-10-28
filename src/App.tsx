@@ -79,7 +79,7 @@ const TOOLBAR_STYLE = {
 // l'ID dell'ultimo task completato nel piano (docs/ai/TASKS.md), così l'umano
 // vede sul live fino a dove è arrivato lo sviluppo. Aggiornare la costante a
 // ogni task chiuso.
-const DEVELOPMENT_STATUS = 'T-066'
+const DEVELOPMENT_STATUS = 'T-071'
 
 // Distanza massima Observer↔Target esplorata dal Reverse Planner (T-060), in
 // metri: default 2 km (scala urbana, copertura dei Google 3D Tiles), editabile
@@ -378,8 +378,8 @@ export default function App() {
   const [observerHeightStepM, setObserverHeightStepM] = useState(1)
   // Passo (m) dei comandi di spostamento orizzontale dell'Observer (T-037).
   const [observerMoveStepM, setObserverMoveStepM] = useState(10)
-  // Livello qualità dei tiles 3D (T-067, ADR-021): default Eco (decisione
-  // umano 2026-10-21). All'avvio può essere impostato con
+  // Livello qualità dei tiles 3D (T-067, ADR-021): default Media (decisione
+  // umano 2026-10-28, T-071; prima Eco). All'avvio può essere impostato con
   // ?tileQuality=alta|media|eco (invalido → default + avviso a schermo,
   // pattern tileMaxM): la stessa risoluzione pura è rifatta in CesiumViewer
   // per il solo avviso. Il cambio a runtime muta il tileset di sessione
@@ -939,8 +939,8 @@ export default function App() {
             aria-label="Livello di qualità dei tiles 3D (Alta, Media o Eco)"
           >
             <option value="alta">Alta</option>
-            <option value="media">Media</option>
-            <option value="eco">Eco (default)</option>
+            <option value="media">Media (default)</option>
+            <option value="eco">Eco</option>
           </select>
         </label>
         {tileLoad !== null && (tileLoad.busy || tileLoad.percent < 100) && (
