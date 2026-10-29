@@ -9,6 +9,7 @@ import {
   Color,
   Ion,
   JulianDate,
+  PolylineDashMaterialProperty,
   ScreenSpaceEventHandler,
   ScreenSpaceEventType,
   Viewer,
@@ -33,7 +34,9 @@ import {
   resolveTilesetSessionKey,
 } from './userKeys'
 import { createMoonTexture, moonDiameterM, moonPositionEcef } from './moonRender'
+import { moonPathArcPositions } from './moonPathRender'
 import { moonTopocentric, type MoonTopocentric } from '../astronomy/moon'
+import type { MoonSkyPath } from '../astronomy/moonPath'
 import type { GeoPoint } from '../geodesy/geodesy'
 import type { RestrictivePoint } from '../planning/occlusion'
 import type { PlannerPointId } from '../planning/points'
@@ -49,6 +52,15 @@ export interface CesiumViewerProps {
    * indecidibile o analisi assente).
    */
   occlusionPoint: RestrictivePoint | null
+  /**
+   * T-075: traiettoria apparente della Luna nel cielo — passaggio sopra
+   * l'orizzonte che contiene l'orario in uso (o il prossimo, se la Luna è
+   * sotto), calcolato in App su dati topocentrici reali. `null` = nessun arco
+   * (Observer assente o nessun passaggio entro la finestra di ricerca).
+   */
+  moonPath: MoonSkyPath | null
+  /** T-075: spunta «Traiettoria Luna» — mostra/nasconde l'arco in scena. */
+  moonPathVisible: boolean
   /**
    * Livello di qualità dei tiles (T-067, ADR-021): tocca SOLO la densità della
    * mesh disegnata; quote di suolo e occlusione passano dal sampler a max LOD
@@ -177,6 +189,8 @@ export default function CesiumViewer({
   target,
   time,
   occlusionPoint,
+  moonPath,
+  moonPathVisible,
   tileQuality,
   onTileLoadProgress,
   onScenePick,
@@ -666,6 +680,38 @@ export default function CesiumViewer({
       },
     })
   }, [occlusionPoint])
+
+  // Traiettoria della Luna nel cielo (T-075): arco tratteggiato ciano su
+  // «sfera celeste» centrata sull'Observer (raggio = distanza topocentrica
+  // reale a metà passaggio, ADR-025), distinto dalla linea di vista verde
+  // solida. La geometria è statica per passaggio (App la ricalcola solo
+  // quando cambia Observer o passaggio) e la visibilità segue la spunta
+  // «Traiettoria Luna»: il cambio di visibilità ricrea l'entità, come per i
+  // marker. Nessun legame con i tile: solo entità dinamiche.
+  useEffect(() => {
+    const viewer = viewerRef.current
+    if (viewer === null) {
+      return
+    }
+    const pathId = 'line-moon-path'
+    const existing = viewer.entities.getById(pathId)
+    if (existing !== undefined) {
+      viewer.entities.remove(existing)
+    }
+    if (observer === null || moonPath === null) {
+      return
+    }
+    const entity = viewer.entities.add({
+      id: pathId,
+      polyline: {
+        positions: moonPathArcPositions(observer, moonPath),
+        width: 2,
+        material: new PolylineDashMaterialProperty({ color: Color.CYAN }),
+        arcType: ArcType.NONE,
+      },
+    })
+    entity.show = moonPathVisible
+  }, [observer, moonPath, moonPathVisible])
 
   return (
     <div style={{ position: 'absolute', inset: 0 }}>

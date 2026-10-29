@@ -16,6 +16,7 @@ import {
 } from './cesium/userKeys'
 import { flyToObserverView, flyToOverhead, moveCameraWithObserver } from './cesium/camera'
 import { moonTopocentric } from './astronomy/moon'
+import { moonSkyPath, type MoonSkyPath } from './astronomy/moonPath'
 import {
   HOME_VIEW,
   PLANNER_POINT_LABELS,
@@ -90,7 +91,7 @@ const TOOLBAR_STYLE = {
 // l'ID dell'ultimo task completato nel piano (docs/ai/TASKS.md), così l'umano
 // vede sul live fino a dove è arrivato lo sviluppo. Aggiornare la costante a
 // ogni task chiuso.
-const DEVELOPMENT_STATUS = 'T-074'
+const DEVELOPMENT_STATUS = 'T-075'
 
 // Distanza massima Observer↔Target esplorata dal Reverse Planner (T-060), in
 // metri: default 2 km (scala urbana, copertura dei Google 3D Tiles), editabile
@@ -492,6 +493,11 @@ export default function App() {
   const [occlusionReport, setOcclusionReport] = useState<SightLineReport | null>(null)
   const [occlusionNote, setOcclusionNote] = useState<string | null>(null)
   const [occlusionBusy, setOcclusionBusy] = useState(false)
+  // Traiettoria della Luna nel cielo (T-075): campionamento del passaggio
+  // sopra l'orizzonte che contiene l'orario in uso (o del prossimo), e spunta
+  // di visibilità (accesa anche dal click su «Vista Luna»).
+  const [moonPath, setMoonPath] = useState<MoonSkyPath | null>(null)
+  const [moonPathVisible, setMoonPathVisible] = useState(false)
   const effectiveDate = new Date(effectiveTimeMs(baseDateMs, sliderOffsetMin))
   // Fase lunare all'orario in uso (geocentrica, standard): blocco a destra
   // della riga slider nella barra Tempo, % C/D nei risultati allineamenti.
@@ -501,6 +507,41 @@ export default function App() {
   // blocco accanto alla Fase lunare nella barra Tempo (T-074); null senza
   // Observer → il blocco non compare, come le righe lunari nel box Dati.
   const sunStateNow = observer !== null ? sunTwilightState(observer, effectiveDate) : null
+
+  // Cache della traiettoria (T-075): l'arco dipende solo dall'Observer e dal
+  // passaggio sopra l'orizzonte selezionato. Muovere slider/±1 min dentro lo
+  // stesso passaggio NON ricampiona (un ricalcolo costa ~400 chiamate di
+  // moonTopocentric): la guardia confronta Observer e orario con la cache —
+  // con `centerMs <= setDateMs` il passaggio «contenente o prossimo» è
+  // invariato per costruzione di moonSkyPath.
+  const moonPathCacheRef = useRef<{ observer: GeoPoint | null; path: MoonSkyPath | null }>({
+    observer: null,
+    path: null,
+  })
+  useEffect(() => {
+    if (observer === null) {
+      if (moonPathCacheRef.current.path !== null) {
+        moonPathCacheRef.current = { observer: null, path: null }
+        setMoonPath(null)
+      }
+      return
+    }
+    const centerMs = effectiveDate.getTime()
+    const cached = moonPathCacheRef.current
+    if (
+      cached.path !== null &&
+      cached.observer !== null &&
+      cached.observer.latitudeDeg === observer.latitudeDeg &&
+      cached.observer.longitudeDeg === observer.longitudeDeg &&
+      cached.observer.heightM === observer.heightM &&
+      centerMs <= cached.path.setDateMs
+    ) {
+      return
+    }
+    const path = moonSkyPath(observer, centerMs)
+    moonPathCacheRef.current = { observer, path }
+    setMoonPath(path)
+  }, [observer, effectiveDate])
 
   const points: Record<PlannerPointId, GeoPoint | null> = { observer, target }
 
@@ -736,6 +777,9 @@ export default function App() {
       return
     }
     const moon = moonTopocentric(observer, effectiveDate)
+    // T-075: entrare in Vista Luna accende anche la traiettoria nel cielo
+    // (la spunta «Traiettoria Luna» la spegne/riaccende).
+    setMoonPathVisible(true)
     flyToObserverView(viewer, observer, moon.azimuthDeg, moon.altitudeDeg)
   }
 
@@ -1068,6 +1112,18 @@ export default function App() {
         >
           Vista Luna
         </button>
+        <label
+          style={ROW_STYLE}
+          title="Traiettoria della Luna nel cielo: arco tratteggiato ciano dal sorgere al tramonto del passaggio sopra l'orizzonte dell'orario in uso (o del prossimo, se ora la Luna è sotto l'orizzonte). Si attiva anche premendo «Vista Luna»."
+        >
+          Traiettoria Luna{' '}
+          <input
+            type="checkbox"
+            checked={moonPathVisible}
+            disabled={observer === null}
+            onChange={(event) => setMoonPathVisible(event.target.checked)}
+          />
+        </label>
         <button
           onClick={flyToObserverOverhead}
           style={BUTTON_STYLE}
@@ -1677,6 +1733,8 @@ export default function App() {
             observer={observer}
             target={target}
             time={effectiveDate}
+            moonPath={moonPath}
+            moonPathVisible={moonPathVisible}
             occlusionPoint={
               occlusionReport !== null && occlusionReport.status === 'occluded'
                 ? occlusionReport.mostRestrictive
