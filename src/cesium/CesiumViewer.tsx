@@ -34,7 +34,7 @@ import {
   resolveTilesetSessionKey,
 } from './userKeys'
 import { createMoonTexture, moonDiameterM, moonPositionEcef } from './moonRender'
-import { moonPathArcPositions } from './moonPathRender'
+import { moonPathArcSegments } from './moonPathRender'
 import { moonTopocentric, type MoonTopocentric } from '../astronomy/moon'
 import type { MoonSkyPath } from '../astronomy/moonPath'
 import type { GeoPoint } from '../geodesy/geodesy'
@@ -53,10 +53,9 @@ export interface CesiumViewerProps {
    */
   occlusionPoint: RestrictivePoint | null
   /**
-   * T-075: traiettoria apparente della Luna nel cielo — passaggio sopra
-   * l'orizzonte che contiene l'orario in uso (o il prossimo, se la Luna è
-   * sotto), calcolato in App su dati topocentrici reali. `null` = nessun arco
-   * (Observer assente o nessun passaggio entro la finestra di ricerca).
+   * T-075/T-076: traiettoria apparente della Luna nel cielo — finestra di
+   * campionamento centrata sull'orario in uso (±6 h), calcolata in App su
+   * dati topocentrici reali. `null` = nessun arco (Observer assente).
    */
   moonPath: MoonSkyPath | null
   /** T-075: spunta «Traiettoria Luna» — mostra/nasconde l'arco in scena. */
@@ -681,36 +680,40 @@ export default function CesiumViewer({
     })
   }, [occlusionPoint])
 
-  // Traiettoria della Luna nel cielo (T-075): arco tratteggiato ciano su
+  // Traiettoria della Luna nel cielo (T-075/T-076): arco tratteggiato ciano su
   // «sfera celeste» centrata sull'Observer (raggio = distanza topocentrica
-  // reale a metà passaggio, ADR-025), distinto dalla linea di vista verde
-  // solida. La geometria è statica per passaggio (App la ricalcola solo
-  // quando cambia Observer o passaggio) e la visibilità segue la spunta
-  // «Traiettoria Luna»: il cambio di visibilità ricrea l'entità, come per i
-  // marker. Nessun legame con i tile: solo entità dinamiche.
+  // reale della Luna all'orario in uso, ADR-025 rev.), distinto dalla linea di
+  // vista verde solida. La finestra è centrata sull'orario in uso: il campione
+  // centrale coincide con la Luna billboard e ogni cambio di orario (slider,
+  // ±1 min, allineamento adottato) ricentra l'arco (App ricalcola oltre la
+  // tolleranza di cache). I tratti sopra l'orizzonte sono segmenti disgiunti:
+  // un'entità per tratto, ricreata a ogni geometria/visibilità (pattern
+  // marker). Nessun legame con i tile: solo entità dinamiche.
   useEffect(() => {
     const viewer = viewerRef.current
     if (viewer === null) {
       return
     }
-    const pathId = 'line-moon-path'
-    const existing = viewer.entities.getById(pathId)
-    if (existing !== undefined) {
-      viewer.entities.remove(existing)
+    for (const entity of Array.from(viewer.entities.values)) {
+      if (entity.id.startsWith('line-moon-path-')) {
+        viewer.entities.remove(entity)
+      }
     }
     if (observer === null || moonPath === null) {
       return
     }
-    const entity = viewer.entities.add({
-      id: pathId,
-      polyline: {
-        positions: moonPathArcPositions(observer, moonPath),
-        width: 2,
-        material: new PolylineDashMaterialProperty({ color: Color.CYAN }),
-        arcType: ArcType.NONE,
-      },
+    moonPathArcSegments(observer, moonPath).forEach((positions, index) => {
+      const entity = viewer.entities.add({
+        id: `line-moon-path-${index}`,
+        polyline: {
+          positions,
+          width: 2,
+          material: new PolylineDashMaterialProperty({ color: Color.CYAN }),
+          arcType: ArcType.NONE,
+        },
+      })
+      entity.show = moonPathVisible
     })
-    entity.show = moonPathVisible
   }, [observer, moonPath, moonPathVisible])
 
   return (

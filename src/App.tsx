@@ -91,7 +91,13 @@ const TOOLBAR_STYLE = {
 // l'ID dell'ultimo task completato nel piano (docs/ai/TASKS.md), così l'umano
 // vede sul live fino a dove è arrivato lo sviluppo. Aggiornare la costante a
 // ogni task chiuso.
-const DEVELOPMENT_STATUS = 'T-075'
+const DEVELOPMENT_STATUS = 'T-076'
+
+// Tolleranza di cache della traiettoria della Luna (T-076): sotto questo
+// scarto di orario l'arco non si ricampiona. La finestra copre ±6 h attorno
+// all'orario in uso, quindi la Luna resta comunque sul suo arco anche entro
+// la tolleranza; il ricentraggio avviene a ogni scarto maggiore.
+const MOON_PATH_REFRESH_MS = 60_000
 
 // Distanza massima Observer↔Target esplorata dal Reverse Planner (T-060), in
 // metri: default 2 km (scala urbana, copertura dei Google 3D Tiles), editabile
@@ -493,9 +499,9 @@ export default function App() {
   const [occlusionReport, setOcclusionReport] = useState<SightLineReport | null>(null)
   const [occlusionNote, setOcclusionNote] = useState<string | null>(null)
   const [occlusionBusy, setOcclusionBusy] = useState(false)
-  // Traiettoria della Luna nel cielo (T-075): campionamento del passaggio
-  // sopra l'orizzonte che contiene l'orario in uso (o del prossimo), e spunta
-  // di visibilità (accesa anche dal click su «Vista Luna»).
+  // Traiettoria della Luna nel cielo (T-075/T-076): campionamento della
+  // finestra centrata sull'orario in uso (±6 h) e spunta di visibilità
+  // (accesa anche dal click su «Vista Luna»).
   const [moonPath, setMoonPath] = useState<MoonSkyPath | null>(null)
   const [moonPathVisible, setMoonPathVisible] = useState(false)
   const effectiveDate = new Date(effectiveTimeMs(baseDateMs, sliderOffsetMin))
@@ -508,12 +514,12 @@ export default function App() {
   // Observer → il blocco non compare, come le righe lunari nel box Dati.
   const sunStateNow = observer !== null ? sunTwilightState(observer, effectiveDate) : null
 
-  // Cache della traiettoria (T-075): l'arco dipende solo dall'Observer e dal
-  // passaggio sopra l'orizzonte selezionato. Muovere slider/±1 min dentro lo
-  // stesso passaggio NON ricampiona (un ricalcolo costa ~400 chiamate di
-  // moonTopocentric): la guardia confronta Observer e orario con la cache —
-  // con `centerMs <= setDateMs` il passaggio «contenente o prossimo» è
-  // invariato per costruzione di moonSkyPath.
+  // Cache della traiettoria (T-075/T-076): l'arco è la finestra centrata
+  // sull'orario in uso, quindi ogni cambio significativo di orario — slider,
+  // ±1 min, adozione di un allineamento (anche nel passato) — lo ricentra.
+  // Un ricalcolo costa ~145 chiamate di moonTopocentric (~7 ms, misurato
+  // T-049): sotto la tolleranza (60 s) lo salto, perché la Luna resta comunque
+  // sul suo arco; con la spunta spenta nessun calcolo.
   const moonPathCacheRef = useRef<{ observer: GeoPoint | null; path: MoonSkyPath | null }>({
     observer: null,
     path: null,
@@ -526,6 +532,9 @@ export default function App() {
       }
       return
     }
+    if (!moonPathVisible) {
+      return
+    }
     const centerMs = effectiveDate.getTime()
     const cached = moonPathCacheRef.current
     if (
@@ -534,14 +543,14 @@ export default function App() {
       cached.observer.latitudeDeg === observer.latitudeDeg &&
       cached.observer.longitudeDeg === observer.longitudeDeg &&
       cached.observer.heightM === observer.heightM &&
-      centerMs <= cached.path.setDateMs
+      Math.abs(centerMs - cached.path.centerDateMs) < MOON_PATH_REFRESH_MS
     ) {
       return
     }
     const path = moonSkyPath(observer, centerMs)
     moonPathCacheRef.current = { observer, path }
     setMoonPath(path)
-  }, [observer, effectiveDate])
+  }, [observer, effectiveDate, moonPathVisible])
 
   const points: Record<PlannerPointId, GeoPoint | null> = { observer, target }
 
@@ -1114,7 +1123,7 @@ export default function App() {
         </button>
         <label
           style={ROW_STYLE}
-          title="Traiettoria della Luna nel cielo: arco tratteggiato ciano dal sorgere al tramonto del passaggio sopra l'orizzonte dell'orario in uso (o del prossimo, se ora la Luna è sotto l'orizzonte). Si attiva anche premendo «Vista Luna»."
+          title="Traiettoria della Luna nel cielo: arco tratteggiato ciano della corsa nelle sei ore prima e dopo l'orario in uso, con la Luna sempre sul suo punto dell'arco. Cambiare orario o adottare un altro allineamento ricentra l'arco. Si attiva anche premendo «Vista Luna»."
         >
           Traiettoria Luna{' '}
           <input

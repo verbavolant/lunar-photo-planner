@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { moonSkyPath } from './moonPath'
+import { moonHorizonCrossingMs, moonSkyPath } from './moonPath'
 import { moonTopocentric } from './moon'
 import type { GeoPoint } from '../geodesy/geodesy'
 
@@ -17,58 +17,44 @@ function findInstantMs(observer: GeoPoint, predicate: (altitudeDeg: number) => b
   throw new Error('nessun istante soddisfa il predicato nella finestra di ricerca del test')
 }
 
-/**
- * Sorgere con la Luna sotto l'orizzonte 10 h prima (il gap tra passaggi a
- * lat 45° supera sempre 10 h: il test lo verifica esplicitamente).
- */
-function findRiseWithGapMs(observer: GeoPoint): number {
-  const centerMs = findInstantMs(observer, (alt) => alt > 20)
-  const first = moonSkyPath(observer, centerMs)
-  if (first === null) {
-    throw new Error('nessun passaggio trovato dal test')
-  }
-  let riseMs = first.riseDateMs
-  for (let attempt = 0; attempt < 20; attempt += 1) {
-    const probeMs = riseMs - 10 * 3_600_000
-    if (moonTopocentric(observer, new Date(probeMs)).altitudeDeg <= 0) {
-      return riseMs
+/** Prima coppia consecutiva (sotto, sopra) a passi di 30 min entro 40 giorni. */
+function findBelowAbovePairMs(observer: GeoPoint): { belowMs: number; aboveMs: number } {
+  let previousMs = findInstantMs(observer, (alt) => alt < -5)
+  for (let minutes = 30; minutes <= 60 * 24 * 40; minutes += 30) {
+    const dateMs = START_MS + minutes * 60_000
+    if (moonTopocentric(observer, new Date(dateMs)).altitudeDeg > 0) {
+      return { belowMs: previousMs, aboveMs: dateMs }
     }
-    const next = moonSkyPath(observer, riseMs + 24 * 3_600_000)
-    if (next === null) {
-      throw new Error('passaggio successivo non trovato dal test')
-    }
-    riseMs = next.riseDateMs
+    previousMs = dateMs
   }
-  throw new Error('nessun sorgere con 10 h di Luna sotto l\u2019orizzonte')
+  throw new Error('nessun attraversamento trovato nella finestra di ricerca del test')
 }
 
 describe('moonSkyPath', () => {
-  it('passaggio in corso: contiene l\u2019orario, capi sull\u2019orizzonte, interni sopra', () => {
+  it('il campione centrale coincide con la Luna all’orario in uso (coincidenza col billboard)', () => {
     const centerMs = findInstantMs(LONATO, (alt) => alt > 20)
     const path = moonSkyPath(LONATO, centerMs)
-    expect(path).not.toBeNull()
-    if (path === null) {
-      return
-    }
-    expect(path.riseDateMs).toBeLessThanOrEqual(centerMs)
-    expect(path.setDateMs).toBeGreaterThanOrEqual(centerMs)
-    const last = path.samples.length - 1
-    expect(Math.abs(path.samples[0].altitudeDeg)).toBeLessThan(0.05)
-    expect(Math.abs(path.samples[last].altitudeDeg)).toBeLessThan(0.05)
-    for (let i = 1; i < last; i += 1) {
-      expect(path.samples[i].altitudeDeg).toBeGreaterThan(-0.05)
-    }
-    expect(path.samples[0].dateMs).toBe(path.riseDateMs)
-    expect(path.samples[last].dateMs).toBe(path.setDateMs)
+    const center = path.samples[(path.samples.length - 1) / 2]
+    expect(center.dateMs).toBe(centerMs)
+    const moon = moonTopocentric(LONATO, new Date(centerMs))
+    expect(center.azimuthDeg).toBeCloseTo(moon.azimuthDeg, 9)
+    expect(center.altitudeDeg).toBeCloseTo(moon.altitudeDeg, 9)
+    expect(path.radiusM).toBeCloseTo(moon.distanceM, 6)
   })
 
-  it('campionamento uniforme: tempi crescenti, passo ≤ 5 min', () => {
+  it('capi della finestra: campioni a ±windowHours dall’orario in uso', () => {
     const centerMs = findInstantMs(LONATO, (alt) => alt > 20)
     const path = moonSkyPath(LONATO, centerMs)
-    expect(path).not.toBeNull()
-    if (path === null) {
-      return
-    }
+    expect(path.centerDateMs).toBe(centerMs)
+    expect(path.samples[0].dateMs).toBe(centerMs - 6 * 3_600_000)
+    expect(path.samples[path.samples.length - 1].dateMs).toBe(centerMs + 6 * 3_600_000)
+  })
+
+  it('campionamento uniforme: tempi crescenti, passo ≤ 5 min, orario in uso incluso', () => {
+    const centerMs = findInstantMs(LONATO, (alt) => alt > 20)
+    const path = moonSkyPath(LONATO, centerMs)
+    expect(path.samples.length % 2).toBe(1)
+    expect(path.samples.some((sample) => sample.dateMs === centerMs)).toBe(true)
     for (let i = 1; i < path.samples.length; i += 1) {
       const deltaMs = path.samples[i].dateMs - path.samples[i - 1].dateMs
       expect(deltaMs).toBeGreaterThan(0)
@@ -76,13 +62,9 @@ describe('moonSkyPath', () => {
     }
   })
 
-  it('i campioni coincidono con moonTopocentric all\u2019istante del campione', () => {
+  it('i campioni coincidono con moonTopocentric all’istante del campione', () => {
     const centerMs = findInstantMs(LONATO, (alt) => alt > 20)
     const path = moonSkyPath(LONATO, centerMs)
-    expect(path).not.toBeNull()
-    if (path === null) {
-      return
-    }
     for (let i = 0; i < path.samples.length; i += 10) {
       const sample = path.samples[i]
       const moon = moonTopocentric(LONATO, new Date(sample.dateMs))
@@ -91,13 +73,9 @@ describe('moonSkyPath', () => {
     }
   })
 
-  it('l\u2019azimut è continuo lungo l\u2019arco (salti < 2° a passo di 5 min)', () => {
+  it('l’azimut è continuo lungo l’arco (salti < 2° a passo di 5 min)', () => {
     const centerMs = findInstantMs(LONATO, (alt) => alt > 20)
     const path = moonSkyPath(LONATO, centerMs)
-    expect(path).not.toBeNull()
-    if (path === null) {
-      return
-    }
     for (let i = 1; i < path.samples.length; i += 1) {
       const raw = Math.abs(path.samples[i].azimuthDeg - path.samples[i - 1].azimuthDeg)
       const wrapped = Math.min(raw, 360 - raw)
@@ -105,49 +83,35 @@ describe('moonSkyPath', () => {
     }
   })
 
-  it('Luna sotto l\u2019orizzonte: restituisce il PROSSIMO passaggio (sorgere futuro)', () => {
-    const belowMs = findInstantMs(LONATO, (alt) => alt < -5)
-    const path = moonSkyPath(LONATO, belowMs)
-    expect(path).not.toBeNull()
-    if (path === null) {
-      return
-    }
-    expect(path.riseDateMs).toBeGreaterThan(belowMs)
-    const last = path.samples.length - 1
-    for (let i = 1; i < last; i += 1) {
-      expect(path.samples[i].altitudeDeg).toBeGreaterThan(-0.05)
-    }
-  })
-
-  it('distanza a metà passaggio nel range fisico topocentrico', () => {
+  it('raggio = distanza della Luna all’orario in uso, nel range fisico topocentrico', () => {
     // Range geocentrico NASA fact sheet (perigeo 356.500 km, apogeo 406.700 km)
     // allargato di ±6.500 km per la parallasse topocentrica (raggio terrestre).
     const centerMs = findInstantMs(LONATO, (alt) => alt > 20)
     const path = moonSkyPath(LONATO, centerMs)
-    expect(path).not.toBeNull()
-    if (path === null) {
-      return
-    }
-    expect(path.midDistanceM).toBeGreaterThan(350_000_000)
-    expect(path.midDistanceM).toBeLessThan(413_200_000)
+    expect(path.radiusM).toBeGreaterThan(350_000_000)
+    expect(path.radiusM).toBeLessThan(413_200_000)
   })
 
-  it('finestra di ricerca ristretta e nessun passaggio: null', () => {
-    const riseMs = findRiseWithGapMs(LONATO)
-    const probeMs = riseMs - 10 * 3_600_000
-    expect(moonTopocentric(LONATO, new Date(probeMs)).altitudeDeg).toBeLessThanOrEqual(0)
-    expect(moonSkyPath(LONATO, probeMs, { searchWindowHours: 1 })).toBeNull()
+  it('finestra personalizzata (windowHours): capi a ±1 h', () => {
+    const centerMs = findInstantMs(LONATO, (alt) => alt > 20)
+    const path = moonSkyPath(LONATO, centerMs, { windowHours: 1 })
+    expect(path.windowHours).toBe(1)
+    expect(path.samples[0].dateMs).toBe(centerMs - 3_600_000)
+    expect(path.samples[path.samples.length - 1].dateMs).toBe(centerMs + 3_600_000)
   })
 
-  it('cap sul numero di campioni con passaggi lunghi (maxSamples)', () => {
+  it('cap sul numero di campioni (maxSamples) con centro ancora sull’orario in uso', () => {
     const centerMs = findInstantMs(LONATO, (alt) => alt > 20)
     const path = moonSkyPath(LONATO, centerMs, { maxSamples: 50 })
-    expect(path).not.toBeNull()
-    if (path === null) {
-      return
-    }
     expect(path.samples.length).toBeLessThanOrEqual(50)
-    expect(path.samples[0].dateMs).toBe(path.riseDateMs)
-    expect(path.samples[path.samples.length - 1].dateMs).toBe(path.setDateMs)
+    expect(path.samples[(path.samples.length - 1) / 2].dateMs).toBe(centerMs)
+  })
+
+  it('moonHorizonCrossingMs: il crossing sta tra i due istanti e sull’orizzonte (|alt| < 0,01°)', () => {
+    const { belowMs, aboveMs } = findBelowAbovePairMs(LONATO)
+    const crossingMs = moonHorizonCrossingMs(LONATO, belowMs, aboveMs)
+    expect(crossingMs).toBeGreaterThan(belowMs)
+    expect(crossingMs).toBeLessThan(aboveMs)
+    expect(Math.abs(moonTopocentric(LONATO, new Date(crossingMs)).altitudeDeg)).toBeLessThan(0.01)
   })
 })

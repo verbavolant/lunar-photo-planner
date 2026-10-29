@@ -66,7 +66,7 @@
 ┌──────────────────────────────────────────────────────────────────────────┐
 │ BARRETTA COMANDI  Osservatore · Target · Azzera · Vai a Home ·           │
 │    Imposta come Home · Vista Luna · Sopra Observer · 100 m · Chiavi API  │
-│    Cerca allineamenti Luna · Cerca luogo per il Target    Sviluppo: T-075│
+│    Cerca allineamenti Luna · Cerca luogo per il Target    Sviluppo: T-076│
 ├───────────────────────────┬──────────────────────────────────────────────┤
 │ BOX LATERALE (≈380 px)    │                                              │
 │  • POV camera             │            SCENA 3D                          │
@@ -75,6 +75,7 @@
 │  • Dati (misure + Luna)   │   marker arancione = Target                  │
 │  • Cerca allineamenti     │   linea verde = linea di vista               │
 │    (finestra di ricerca)  │   disco = Luna (posa e dimensione reali)     │
+│                           │   arco tratteggiato ciano = traiettoria Luna │
 ├───────────────────────────┴──────────────────────────────────────────────┤
 │ CARD TEMPO  Data/ora (fuso: …) · −1/+1 min · slider ±720 min · Adesso    │
 │ Orario in uso: 21/10/2026 19:42 · Tempo effettivo (UTC): 17:42:00 UTC    │
@@ -130,7 +131,7 @@ Nella card **Osservatore** usa `▲ avanti`, `▼ indietro`, `◀ sinistra`, `�
 Nella **card Tempo** in basso: imposta `Data/ora` (è l'ora locale del tuo fuso), rifinisci con `−1 min` / `+1 min`, oppure sposta lo **slider** (−720…+720 min, passi di 5 min) per "vedere scorrere" il cielo. `Adesso` riporta tutto all'ora corrente. Controlla nella card **Dati** le righe `Luna · Azimut`, `Luna · Altitudine` (se è negativa la Luna è sotto l'orizzonte), `Luna · Diametro`, e il blocco **Fase lunare** a destra dello slider; accanto allo slider leggi sempre **`Orario in uso: …`**, l'orario effettivo che usano tutti i calcoli.
 
 **Passo 7 — Guarda l'inquadratura e cerca l'istante.**
-Premi **`Vista Luna`**: la camera si mette 1 m sopra l'Osservatore, rivolta verso la Luna con la sua altitudine reale. Nel cielo compare anche l'**arco tratteggiato ciano** della **traiettoria della Luna**: il passaggio sopra l'orizzonte dell'orario in uso, dal sorgere al tramonto (se ora la Luna è sotto l'orizzonte, il prossimo passaggio: [§6.1](#61-barra-comandi-in-alto)). Premi **`Sopra Observer · 100 m`** per la vista in pianta (nord in alto), così verifichi la geometria. Premi infine **`Cerca allineamenti Luna`** per farti dire **quando** la Luna passa esattamente sulla linea Osservatore→Target: [§8](#8-trovare-listante-giusto-cerca-allineamenti-luna).
+Premi **`Vista Luna`**: la camera si mette 1 m sopra l'Osservatore, rivolta verso la Luna con la sua altitudine reale. Nel cielo compare anche l'**arco tratteggiato ciano** della **traiettoria della Luna**: la sua corsa nelle **sei ore prima e dopo l'orario in uso** (i tratti sopra l'orizzonte), con la Luna sempre sul suo punto dell'arco; cambiare orario (slider, ±1 min) o adottare un altro allineamento ricentra l'arco sull'orario nuovo: [§6.1](#61-barra-comandi-in-alto). Premi **`Sopra Observer · 100 m`** per la vista in pianta (nord in alto), così verifichi la geometria. Premi infine **`Cerca allineamenti Luna`** per farti dire **quando** la Luna passa esattamente sulla linea Osservatore→Target: [§8](#8-trovare-listante-giusto-cerca-allineamenti-luna).
 
 ---
 
@@ -146,7 +147,7 @@ Premi **`Vista Luna`**: la camera si mette 1 m sopra l'Osservatore, rivolta vers
 | `Vai a Home` | con **Home salvata**: volo nadirale sul punto salvato **e riporta l'Osservatore su quel punto** (con il suolo di riferimento del salvataggio); **senza Home**: volo nadirale su Piazza della Loggia, Brescia, a ≈500 m dal suolo, senza toccare l'Osservatore | utile per "rientrare" dopo una navigazione persa o dopo aver spostato l'Osservatore |
 | `Imposta come Home` | salva la posizione corrente dell'Osservatore (coordinate, quota e suolo di riferimento) come **Home** nel `localStorage` del browser: al prossimo avvio l'app riparte da lì e `Vai a Home` ci riporta | disabilitato finché l'Osservatore non è posizionato; una sola Home per browser: risalvando la sovrascrivi |
 | `Vista Luna` | camera **1 m sopra l'Osservatore**, orientata con azimut = azimut della Luna e inclinazione = altitudine della Luna (volo animato di 2 s); **accende anche la traiettoria della Luna** nel cielo | richiede l'Osservatore. È la posa del fotografo: da qui vedi la Luna dove la vedrai davvero |
-| `Traiettoria Luna` (spunta) | mostra/nasconde nel cielo l'**arco tratteggiato ciano** della traiettoria della Luna: il passaggio sopra l'orizzonte dell'orario in uso, dal sorgere al tramonto (se la Luna è sotto l'orizzonte, il prossimo passaggio entro la finestra di ricerca) | disabilitata senza Osservatore; si accende anche premendo `Vista Luna`; i capi dell'arco stanno sull'orizzonte, la Luna corrente resta sul suo punto dell'arco |
+| `Traiettoria Luna` (spunta) | mostra/nasconde nel cielo l'**arco tratteggiato ciano** della traiettoria della Luna: la corsa nelle **sei ore prima e dopo l'orario in uso**, con i tratti sopra l'orizzonte e la Luna corrente sempre sul suo punto dell'arco; cambiare orario o adottare un altro allineamento ricentra l'arco | disabilitata senza Osservatore; si accende anche premendo `Vista Luna` |
 | `Sopra Observer · 100 m` | vista dall'alto 100 m sopra l'Osservatore, puntato su di lui, nord in alto | disabilitato finché l'Osservatore non è posizionato |
 | `Cerca allineamenti Luna` | apre la finestra di ricerca degli allineamenti | disabilitato se mancano Osservatore o Target |
 | «Qualità tiles» (menu) | sceglie quanto dettaglio caricare nella mesh 3D: `Alta`, `Media` (default), `Eco` | si applica **a caldo**, senza ricaricare la scena; quote e occlusione non cambiano col livello ([§9](#9-parametri-nellurl-provider-tilemaxm-tilequality)) |
@@ -154,7 +155,7 @@ Premi **`Vista Luna`**: la camera si mette 1 m sopra l'Osservatore, rivolta vers
 | `Chiavi API` | apre la finestra per inserire **le tue chiavi** (chiave Google Maps e/o token Cesium ion) e scegliere il provider della scena: sovrascrivono le chiavi configurate nel sito | i valori restano nel `localStorage` di questo browser; «Salva e applica» ricrea la scena; `?provider=` nell'URL ha priorità sulla scelta salvata ([§6.10](#610-finestra-chiavi-api), [§9](#9-parametri-nellurl-provider-tilemaxm-tilequality)) |
 | `Manuale` | apre questo manuale in una **finestra separata**, formattato in HTML | il contenuto è `MANUALE.md` alla root del repository; i collegamenti ai file del repo (es. `README.md`) portano a GitHub |
 
-A destra della barra, oltre ai pulsanti: **`Sviluppo: T-075`** — l'ID dell'ultimo task completato nel piano di sviluppo del progetto; si aggiorna a ogni task chiuso. L'orario in uso non sta qui: è nella card Tempo, accanto allo slider ([§6.7](#67-card-tempo-fascia-in-basso-tutta-larghezza)).
+A destra della barra, oltre ai pulsanti: **`Sviluppo: T-076`** — l'ID dell'ultimo task completato nel piano di sviluppo del progetto; si aggiorna a ogni task chiuso. L'orario in uso non sta qui: è nella card Tempo, accanto allo slider ([§6.7](#67-card-tempo-fascia-in-basso-tutta-larghezza)).
 
 > **Il punto attivo comanda il clic sulla scena.** Se dopo aver posizionato il Target lasci `Target` selezionato e clicchi sulla scena, sposti il **Target**, non l'Osservatore. Controlla quale dei due pulsanti è evidenziato.
 
@@ -566,7 +567,7 @@ Senza chiave o token l'app resta utilizzabile: si naviga sul globo e si posizion
 | Il clic non posiziona il punto | hai **trascinato** invece di cliccare, oppure hai cliccato il vuoto (nessuna superficie sotto il cursore) | clic secco sulla superficie visibile; verifica che il pulsante `Osservatore`/`Target` sia attivo |
 | Il punto va "sotto" la mesh, quote senza senso | i tile non sono caricati: il clic ha colpito l'ellissoide | attendi la mesh o cambia zona/`?tileMaxM` |
 | La Luna non si vede in scena | `Luna · Altitudine` negativa (sotto l'orizzonte), oppure stai guardando da un'altra parte / in nadir | cambia orario, poi premi `Vista Luna` |
-| L'arco della traiettoria non compare | spunta `Traiettoria Luna` spenta (si accende premendo `Vista Luna`), oppure nessun passaggio completabile entro ±48 h (solo a latitudini estreme, con la Luna sotto l'orizzonte per giorni) | attiva la spunta o premi `Vista Luna`; controlla `Luna · Altitudine` |
+| L'arco della traiettoria non compare | spunta `Traiettoria Luna` spenta (si accende premendo `Vista Luna`), oppure in quelle sei ore la Luna non sale mai sopra l'orizzonte (tipico delle latitudini estreme) | attiva la spunta o premi `Vista Luna`; controlla `Luna · Altitudine` |
 | Edifici lontani sgranati o assenti | dettaglio limitato oltre ~1 km (default) | `?tileMaxM=2000` (più dati) |
 | Scena pesante, scatti, caricamento lungo | GPU o connessione limitate, troppe schede che usano WebGL | chiudi altre schede, usa `?tileMaxM=500`, non restare zoomato molto in alto |
 | Dopo un reload i punti sono spariti | nessuna persistenza per Target e orario: lo stato vive solo nella pagina (l'Osservatore torna solo se hai salvato una Home con `Imposta come Home`, §6.1) | segna le coordinate prima di ricaricare |
@@ -591,7 +592,7 @@ Sono i limiti **noti e voluti** dell'attuale release, non bug da segnalare:
 | Suolo sotto l'Osservatore | `Altezza dal suolo` è riferita alla quota letta **al momento del clic**; dopo uno spostamento direzionale (◀▲▼▶) il suolo alla nuova posizione è **ricampionato** sui 3D Tiles prima di applicare il movimento — suolo non determinabile → spostamento non applicato, mai inventato. `−`/`+`/campo numerico cambiano solo la distanza dal suolo di riferimento del clic. |
 | Fase lunare | La frazione illuminata è **geocentrica** (definizione standard delle fasi); lo scarto topocentrico è sotto l'1%. Il **disco** disegnato è una rappresentazione equivalente (nessuna librazione, nessun dettaglio dei mari): contano i numeri. |
 | Stato del Sole | Il blocco `Sole` della barra Tempo e la colonna `sole:` dei risultati usano l'**altitudine geometrica (senza rifrazione) del centro del Sole** con le soglie USNO dei crepuscoli: −0,833° alba/tramonto (lembo superiore sull'orizzonte apparente: raggio 16′ + rifrazione 34′), −6° civile, −12° nautico, −18° astronomico, sotto −18° `Notte`. Il verso `Alba`/`Tramonto` è il segno della variazione dell'altitudine in 2 minuti (agli estremi polari il verso può essere non definito). Verificato contro JPL Horizons (24 istanti: angoli entro 0,005° e codice di presenza `*`/`C`/`N`/`A`/notte coincidente su tutti). |
-| Traiettoria della Luna | L'arco nel cielo è il **passaggio sopra l'orizzonte** (altitudine > 0, senza rifrazione) che contiene l'orario in uso, oppure il **prossimo** se la Luna è sotto; la ricerca copre **±48 h** (a latitudini estreme la Luna può restare sotto per giorni: nessun arco, dichiarato). Campionamento ogni ~5 min (max 400 punti), arco proiettato alla **distanza topocentrica reale della Luna a metà passaggio**: la Luna corrente sta sul suo punto dell'arco. Sorgere e tramonto sono raffinati per bisezione (capi a altitudine ≈ 0). |
+| Traiettoria della Luna | L'arco nel cielo campiona la **finestra centrata sull'orario in uso** (±6 h: 12 ore totali) e disegna i **tratti sopra l'orizzonte** (altitudine > 0, senza rifrazione), spezzati ai passaggi sotto l'orizzonte con capi raffinati per bisezione (altitudine ≈ 0). Il campione all'orario in uso coincide con la Luna in scena (stessa direzione e stessa distanza topocentrica reale): cambiare orario — slider, ±1 min, allineamento adottato — **ricentra l'arco** (ricalcolo oltre 1 minuto di scarto). Se in tutta la finestra la Luna resta sotto l'orizzonte, nessun tratto: arco assente, dichiarato. |
 | Fotocamera | Nessuna simulazione di sensore, focale, frustum o "Luna nel frame": [calcolo a mano, §7.3](#73-dal-numero-alla-focale). |
 | Funzionalità non ancora presenti | Ricerca per indirizzo, confronto di più candidati, salvataggio/condivisione della pianificazione (unica eccezione: la Home dell'Osservatore, §6.1), stime di esposizione. |
 | Tempo | Precisione **al minuto** sull'input e sulle etichette; la ricerca allineamenti campiona con il `Passo (min)` scelto e raffina gli attraversamenti, ma il risultato mostrato resta in ore:minuti. |
@@ -626,7 +627,7 @@ Sono i limiti **noti e voluti** dell'attuale release, non bug da segnalare:
 | **Diametro angolare** | dimensione apparente della Luna in gradi |
 | **POV camera** | la vista corrente della camera virtuale (lat/lon, quota, azimut, inclinazione) |
 | **Vista Luna** | camera posta 1 m sopra l'Osservatore, orientata verso la Luna con posa reale |
-| **Traiettoria della Luna** | l'arco apparente che la Luna percorre nel cielo in un passaggio, dal sorgere al tramonto (arco tratteggiato ciano in scena) |
+| **Traiettoria della Luna** | l'arco della sua corsa nel cielo nelle sei ore attorno all'orario in uso, con i tratti sopra l'orizzonte (arco tratteggiato ciano in scena) |
 | **Fase lunare C / D** | crescente / decrescente, con la frazione illuminata all'orario in uso |
 | **Ellissoide WGS84** | la superficie matematica di riferimento delle quote |
 | **Tile 3D / mesh** | i "mattoncini" fotorealistici scaricati dal provider per costruire il territorio 3D |
