@@ -58,6 +58,7 @@ import {
 } from './planning/time'
 import { lineOfSightAzimuthDeg, movePointOnWGS84, verticalAngleDeg, type GeoPoint } from './geodesy/geodesy'
 import { moonPhase } from './astronomy/moonPhase'
+import { sunTwilightLabel, sunTwilightState } from './astronomy/sun'
 import MoonPhaseCard, { moonPhaseLabel } from './components/MoonPhaseCard'
 import { manualeDocumentHtml } from './utils/manuale'
 import manualeMarkdown from '../MANUALE.md?raw'
@@ -88,7 +89,7 @@ const TOOLBAR_STYLE = {
 // l'ID dell'ultimo task completato nel piano (docs/ai/TASKS.md), così l'umano
 // vede sul live fino a dove è arrivato lo sviluppo. Aggiornare la costante a
 // ogni task chiuso.
-const DEVELOPMENT_STATUS = 'T-072'
+const DEVELOPMENT_STATUS = 'T-073'
 
 // Distanza massima Observer↔Target esplorata dal Reverse Planner (T-060), in
 // metri: default 2 km (scala urbana, copertura dei Google 3D Tiles), editabile
@@ -504,6 +505,12 @@ export default function App() {
       { label: 'Luna · Altitudine', value: formatAngleDeg(moon.altitudeDeg) },
       { label: 'Luna · Distanza', value: formatDistanceM(moon.distanceM) },
       { label: 'Luna · Diametro', value: formatAngleDeg(moon.angularDiameterDeg, 4) },
+      // Stato del Sole (T-073): condizioni di luce all'orario in uso, stesse
+      // convenzioni topocentriche airless delle righe lunari sopra.
+      {
+        label: 'Sole · Stato',
+        value: sunTwilightLabel(sunTwilightState(observerPoint, effectiveDate)),
+      },
     ]
   }
 
@@ -1401,27 +1408,29 @@ export default function App() {
                   (Luna sotto l'orizzonte)
                 </div>
               )}
-              {alignmentSearch?.candidates.map((candidate) => (
-                <button
-                  key={candidate.dateMs}
-                  onClick={() => adoptAlignment(candidate.dateMs)}
-                  style={
-                    candidate.dateMs === adoptedAlignmentMs
-                      ? ALIGNMENT_ROW_ADOPTED_STYLE
-                      : ALIGNMENT_ROW_BUTTON_STYLE
-                  }
-                  title="Adotta questo istante come data/ora della vista"
-                >
-                  <div style={ROW_STYLE}>
-                    {formatLocalDateTime(new Date(candidate.dateMs))} · sep{' '}
-                    {formatAngleDeg(candidate.separationDeg, 2)} ·{' '}
-                    {describeAlignmentOffsets(candidate)}
-                  </div>
-                  <div>
-                    fase {moonPhaseLabel(moonPhase(new Date(candidate.dateMs)))}
-                  </div>
-                </button>
-              ))}
+              {observer !== null &&
+                alignmentSearch?.candidates.map((candidate) => (
+                  <button
+                    key={candidate.dateMs}
+                    onClick={() => adoptAlignment(candidate.dateMs)}
+                    style={
+                      candidate.dateMs === adoptedAlignmentMs
+                        ? ALIGNMENT_ROW_ADOPTED_STYLE
+                        : ALIGNMENT_ROW_BUTTON_STYLE
+                    }
+                    title="Adotta questo istante come data/ora della vista"
+                  >
+                    <div style={ROW_STYLE}>
+                      {formatLocalDateTime(new Date(candidate.dateMs))} · sep{' '}
+                      {formatAngleDeg(candidate.separationDeg, 2)} ·{' '}
+                      {describeAlignmentOffsets(candidate)}
+                    </div>
+                    <div>
+                      fase {moonPhaseLabel(moonPhase(new Date(candidate.dateMs)))} · sole:{' '}
+                      {sunTwilightLabel(sunTwilightState(observer, new Date(candidate.dateMs)))}
+                    </div>
+                  </button>
+                ))}
             </div>
           )}
           {reverseWindowOpen && (

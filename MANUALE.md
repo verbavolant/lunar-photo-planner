@@ -214,6 +214,12 @@ Compare appena posizioni almeno un punto. Senza Osservatore mostra solo il sugge
 | `Luna · Distanza` | distanza reale Osservatore → Luna (varia nel mese: perigeo/apogeo) |
 | `Luna · Diametro` | diametro angolare apparente in gradi (è la "dimensione" della Luna nel cielo in quell'istante) |
 
+**Stato del Sole** (riga sotto le `Luna ·`, serve l'Osservatore, stesse convenzioni topocentriche):
+
+| Riga | Valore |
+|---|---|
+| `Sole · Stato` | condizioni di luce all'orario in uso, dall'**altitudine del centro del Sole** (soglie USNO): `Giorno` (centro sopra −0,83°: il lembo è visibile), `Alba`/`Tramonto` (crepuscolo civile, fino a −6°), `Alba/Tramonto nautico` (fino a −12°), `Alba/Tramonto astronomico` (fino a −18°), `Notte` sotto −18°. `Alba` = altitudine in aumento, `Tramonto` = in calo. Dettagli e limiti: [§12](#12-limitazioni-dichiarate-e-precisione) |
+
 **Blocco Allineamento ora** (serve **tutti e due** i punti):
 
 | Riga | Valore |
@@ -248,7 +254,7 @@ Ogni riga risultato è un pulsante cliccabile:
 
 ```
 21/10/2026 19:40 · sep 0,32° · 0,11° a destra · 0,29° sopra
-fase 96% C (crescente)
+fase 96% C (crescente) · sole: Tramonto nautico
 ```
 
 | Pezzo | Significato |
@@ -259,6 +265,7 @@ fase 96% C (crescente)
 | `0,29° sopra` / `sotto` | scarto di altitudine rispetto alla linea |
 | `in azimut` / `in quota` | scarto praticamente nullo su quell'asse (< 0,005°): la Luna è centrata |
 | `fase 96% C (crescente)` | fase lunare in quell'istante |
+| `sole: Tramonto nautico` | stato del Sole in quell'istante (luce ambientale): `Giorno`, `Alba`/`Tramonto` (civile), `Alba/Tramonto nautico`, `Alba/Tramonto astronomico`, `Notte` — stesse soglie della riga `Sole · Stato` del box Dati ([§6.5](#65-card-dati-misure-luna-allineamento-ora)) |
 
 **Cliccare una riga adotta quell'istante** e la mette **in grassetto** finché non ne adotti un'altra o premi `Ricalcola`: `Data/ora` viene impostato, lo slider torna a 0 e tutto il resto (Luna in scena, blocco Fase lunare, righe **Luna ·**) si ricalcola su quell'ora. **La finestra resta aperta** con l'elenco: puoi adottare un altro istante senza ripetere la ricerca; `Ricalcola` riparte dal campo `Ricerca da`, non dall'orario adottato.
 
@@ -450,6 +457,7 @@ Se invece il problema è inverso — il Target è fisso e cerchi **dove** metter
 | `0,31° a sinistra` | idem, al contrario (`▶ destra`) |
 | `sopra` / `sotto` | scegli il distacco verticale che ti serve: 0 per centrare, metà diametro per appoggiare sopra |
 | `fase 96% C (crescente)` | utile per decidere: una falce sottilissima non mostra i dettagli del soggetto in controluce |
+| `sole: Notte` / `sole: Tramonto nautico` | luce ambientale all'istante: di giorno la Luna nel frame è più difficile da vedere, nel crepuscolo profondo il cielo scurisce ma il soggetto in controluce resta leggibile; scegli la fascia che dà l'equilibrio che cerchi |
 | `Nessun allineamento nella finestra cercata.` | allarga `Tolleranza (°)` o `Finestra (giorni)`; se persiste, la Luna non passa mai a quell'azimut: verifica `Azimut iniziale` |
 | `Trovati N passaggi · mostro i primi M (i migliori per separazione)` | la finestra contiene più passaggi di quanti ne mostra: gli M in lista sono quelli con `sep` più piccolo |
 | `N passaggi scartati (Luna sotto l'orizzonte)` | passaggi trovati ma esclusi perché la Luna era sotto l'orizzonte (non fotografabili); il conteggio include i passaggi che altrimenti apparirebbero in lista |
@@ -582,6 +590,7 @@ Sono i limiti **noti e voluti** dell'attuale release, non bug da segnalare:
 | Ostacoli | L'occlusione è valutata **campionando** la superficie 3D in 256 punti lungo la linea di vista ([§6.9](#69-occlusione-della-linea-di-vista)), non con ray casting: ostacoli più sottili del passo di campionamento o marginali possono sfuggire; zone non coperte dalla mesh 3D danno «non determinabile» (l'app scarica da sola i tile necessari lungo la linea), mai «libera». Conta solo ciò che è effettivamente modellato nella mesh. |
 | Suolo sotto l'Osservatore | `Altezza dal suolo` è riferita alla quota letta **al momento del clic**; dopo uno spostamento direzionale (◀▲▼▶) il suolo alla nuova posizione è **ricampionato** sui 3D Tiles prima di applicare il movimento — suolo non determinabile → spostamento non applicato, mai inventato. `−`/`+`/campo numerico cambiano solo la distanza dal suolo di riferimento del clic. |
 | Fase lunare | La frazione illuminata è **geocentrica** (definizione standard delle fasi); lo scarto topocentrico è sotto l'1%. Il **disco** disegnato è una rappresentazione equivalente (nessuna librazione, nessun dettaglio dei mari): contano i numeri. |
+| Stato del Sole | `Sole · Stato` e la colonna `sole:` dei risultati usano l'**altitudine geometrica (senza rifrazione) del centro del Sole** con le soglie USNO dei crepuscoli: −0,833° alba/tramonto (lembo superiore sull'orizzonte apparente: raggio 16′ + rifrazione 34′), −6° civile, −12° nautico, −18° astronomico, sotto −18° `Notte`. Il verso `Alba`/`Tramonto` è il segno della variazione dell'altitudine in 2 minuti (agli estremi polari il verso può essere non definito). Verificato contro JPL Horizons (24 istanti: angoli entro 0,005° e codice di presenza `*`/`C`/`N`/`A`/notte coincidente su tutti). |
 | Fotocamera | Nessuna simulazione di sensore, focale, frustum o "Luna nel frame": [calcolo a mano, §7.3](#73-dal-numero-alla-focale). |
 | Funzionalità non ancora presenti | Ricerca per indirizzo, confronto di più candidati, salvataggio/condivisione della pianificazione (unica eccezione: la Home dell'Osservatore, §6.1), stime di esposizione. |
 | Tempo | Precisione **al minuto** sull'input e sulle etichette; la ricerca allineamenti campiona con il `Passo (min)` scelto e raffina gli attraversamenti, ma il risultato mostrato resta in ore:minuti. |
