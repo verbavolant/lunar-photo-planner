@@ -60,6 +60,7 @@ import { lineOfSightAzimuthDeg, movePointOnWGS84, verticalAngleDeg, type GeoPoin
 import { moonPhase } from './astronomy/moonPhase'
 import { sunTwilightLabel, sunTwilightState } from './astronomy/sun'
 import MoonPhaseCard, { moonPhaseLabel } from './components/MoonPhaseCard'
+import SunStateCard from './components/SunStateCard'
 import { manualeDocumentHtml } from './utils/manuale'
 import manualeMarkdown from '../MANUALE.md?raw'
 
@@ -89,7 +90,7 @@ const TOOLBAR_STYLE = {
 // l'ID dell'ultimo task completato nel piano (docs/ai/TASKS.md), così l'umano
 // vede sul live fino a dove è arrivato lo sviluppo. Aggiornare la costante a
 // ogni task chiuso.
-const DEVELOPMENT_STATUS = 'T-073'
+const DEVELOPMENT_STATUS = 'T-074'
 
 // Distanza massima Observer↔Target esplorata dal Reverse Planner (T-060), in
 // metri: default 2 km (scala urbana, copertura dei Google 3D Tiles), editabile
@@ -177,8 +178,8 @@ const CARD_STYLE = {
 }
 
 // Card Tempo: fascia a tutta larghezza sotto la vista (T-027). Da T-056 è una
-// riga orizzontale: a sinistra la colonna dei comandi data/ora, a destra il
-// blocco Fase lunare (centrato in verticale), non più una riga dedicata.
+// riga orizzontale: a sinistra la colonna dei comandi data/ora, a destra i
+// blocchi Fase lunare e Sole (T-074, centrati in verticale), non più righe dedicate.
 const TEMPO_CARD_STYLE = {
   ...CARD_STYLE,
   display: 'flex',
@@ -496,6 +497,11 @@ export default function App() {
   // della riga slider nella barra Tempo, % C/D nei risultati allineamenti.
   const phaseNow = moonPhase(effectiveDate)
 
+  // Stato del Sole all'orario in uso (topocentrico, serve l'Osservatore):
+  // blocco accanto alla Fase lunare nella barra Tempo (T-074); null senza
+  // Observer → il blocco non compare, come le righe lunari nel box Dati.
+  const sunStateNow = observer !== null ? sunTwilightState(observer, effectiveDate) : null
+
   const points: Record<PlannerPointId, GeoPoint | null> = { observer, target }
 
   function buildMoonRows(observerPoint: GeoPoint): MeasurementRow[] {
@@ -505,12 +511,6 @@ export default function App() {
       { label: 'Luna · Altitudine', value: formatAngleDeg(moon.altitudeDeg) },
       { label: 'Luna · Distanza', value: formatDistanceM(moon.distanceM) },
       { label: 'Luna · Diametro', value: formatAngleDeg(moon.angularDiameterDeg, 4) },
-      // Stato del Sole (T-073): condizioni di luce all'orario in uso, stesse
-      // convenzioni topocentriche airless delle righe lunari sopra.
-      {
-        label: 'Sole · Stato',
-        value: sunTwilightLabel(sunTwilightState(observerPoint, effectiveDate)),
-      },
     ]
   }
 
@@ -1762,6 +1762,7 @@ export default function App() {
           </div>
         </div>
         <MoonPhaseCard phase={phaseNow} />
+        {sunStateNow !== null && <SunStateCard state={sunStateNow} />}
       </div>
     </div>
   )

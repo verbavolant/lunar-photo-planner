@@ -91,7 +91,7 @@ export function sunTwilightState(observer: GeoPoint, date: Date): SunTwilightSta
   }
 }
 
-/** Etichetta italiana dello stato del Sole per la UI (box Dati e risultati). */
+/** Etichetta italiana dello stato del Sole per la UI (barra Tempo e risultati). */
 export function sunTwilightLabel(state: SunTwilightState): string {
   switch (state.band) {
     case 'day':

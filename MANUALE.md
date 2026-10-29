@@ -66,7 +66,7 @@
 ┌──────────────────────────────────────────────────────────────────────────┐
 │ BARRETTA COMANDI  Osservatore · Target · Azzera · Vai a Home ·           │
 │    Imposta come Home · Vista Luna · Sopra Observer · 100 m · Chiavi API  │
-│    Cerca allineamenti Luna · Cerca luogo per il Target    Sviluppo: T-073│
+│    Cerca allineamenti Luna · Cerca luogo per il Target    Sviluppo: T-074│
 ├───────────────────────────┬──────────────────────────────────────────────┤
 │ BOX LATERALE (≈380 px)    │                                              │
 │  • POV camera             │            SCENA 3D                          │
@@ -78,7 +78,7 @@
 ├───────────────────────────┴──────────────────────────────────────────────┤
 │ CARD TEMPO  Data/ora (fuso: …) · −1/+1 min · slider ±720 min · Adesso    │
 │ Orario in uso: 21/10/2026 19:42 · Tempo effettivo (UTC): 17:42:00 UTC    │
-│ Fase lunare (a destra dello slider): disco + 62% C (crescente)           │
+│ Fase lunare + Sole (a destra): disco, 62% C (crescente) · Notte          │
 └──────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -153,7 +153,7 @@ Premi **`Vista Luna`**: la camera si mette 1 m sopra l'Osservatore, rivolta vers
 | `Chiavi API` | apre la finestra per inserire **le tue chiavi** (chiave Google Maps e/o token Cesium ion) e scegliere il provider della scena: sovrascrivono le chiavi configurate nel sito | i valori restano nel `localStorage` di questo browser; «Salva e applica» ricrea la scena; `?provider=` nell'URL ha priorità sulla scelta salvata ([§6.10](#610-finestra-chiavi-api), [§9](#9-parametri-nellurl-provider-tilemaxm-tilequality)) |
 | `Manuale` | apre questo manuale in una **finestra separata**, formattato in HTML | il contenuto è `MANUALE.md` alla root del repository; i collegamenti ai file del repo (es. `README.md`) portano a GitHub |
 
-A destra della barra, oltre ai pulsanti: **`Sviluppo: T-073`** — l'ID dell'ultimo task completato nel piano di sviluppo del progetto; si aggiorna a ogni task chiuso. L'orario in uso non sta qui: è nella card Tempo, accanto allo slider ([§6.7](#67-card-tempo-fascia-in-basso-tutta-larghezza)).
+A destra della barra, oltre ai pulsanti: **`Sviluppo: T-074`** — l'ID dell'ultimo task completato nel piano di sviluppo del progetto; si aggiorna a ogni task chiuso. L'orario in uso non sta qui: è nella card Tempo, accanto allo slider ([§6.7](#67-card-tempo-fascia-in-basso-tutta-larghezza)).
 
 > **Il punto attivo comanda il clic sulla scena.** Se dopo aver posizionato il Target lasci `Target` selezionato e clicchi sulla scena, sposti il **Target**, non l'Osservatore. Controlla quale dei due pulsanti è evidenziato.
 
@@ -170,11 +170,13 @@ La vista corrente della camera in numeri, aggiornata circa 10 volte al secondo m
 
 Dopo `Vista Luna` la camera sta sull'Osservatore (1 m sopra): la card mostra quindi il **punto di vista del fotografo**, con l'azimut e l'inclinazione reali della Luna.
 
-### 6.3 Blocco "Fase lunare" (barra in basso, a destra dello slider)
+### 6.3 Blocchi "Fase lunare" e "Sole" (barra in basso, a destra dello slider)
 
 Titolo, **disco lunare** disegnato con la **frazione illuminata reale** all'orario in uso, più l'etichetta testuale: `62% C (crescente)` oppure `38% D (decrescente)` — `C`/`D` = crescente/decrescente. Il blocco è alla **destra della riga dello slider** nella fascia in basso (card Tempo, stessa riga dei comandi data/ora) e segue automaticamente l'orario in uso: slider, ±1 min e istanti adottati dalla ricerca allineamenti.
 
-> Il disco è una rappresentazione **equivalente** (orientamento del limbo convenzionale, emisfero boreale): i **numeri** (frazione illuminata, azimut, altitudine, diametro) vengono dai calcoli reali.
+Accanto, alla sua destra, il blocco **Sole**: lo **stato di luce** all'orario in uso — `Giorno`, `Alba`/`Tramonto` (crepuscolo civile), `Alba/Tramonto nautico`, `Alba/Tramonto astronomico`, `Notte` — con soglie e dettagli in [§12](#12-limitazioni-dichiarate-e-precisione). Serve l'**Osservatore**: finché non è posizionato il blocco non compare. Anche questo segue l'orario in uso (slider, ±1 min, adozioni dei risultati).
+
+> Il disco è una rappresentazione **equivalente** (orientamento del limbo convenzionale, emisfero boreale): i **numeri** (frazione illuminata, azimut, altitudine, diametro) vengono dai calcoli reali. Lo stato del Sole usa l'altitudine geometrica del centro del Sole, senza rifrazione, come le effemeridi di riferimento del progetto ([§12](#12-limitazioni-dichiarate-e-precisione)).
 
 ### 6.4 Card "Osservatore" (compare dopo il posizionamento)
 
@@ -214,11 +216,7 @@ Compare appena posizioni almeno un punto. Senza Osservatore mostra solo il sugge
 | `Luna · Distanza` | distanza reale Osservatore → Luna (varia nel mese: perigeo/apogeo) |
 | `Luna · Diametro` | diametro angolare apparente in gradi (è la "dimensione" della Luna nel cielo in quell'istante) |
 
-**Stato del Sole** (riga sotto le `Luna ·`, serve l'Osservatore, stesse convenzioni topocentriche):
-
-| Riga | Valore |
-|---|---|
-| `Sole · Stato` | condizioni di luce all'orario in uso, dall'**altitudine del centro del Sole** (soglie USNO): `Giorno` (centro sopra −0,83°: il lembo è visibile), `Alba`/`Tramonto` (crepuscolo civile, fino a −6°), `Alba/Tramonto nautico` (fino a −12°), `Alba/Tramonto astronomico` (fino a −18°), `Notte` sotto −18°. `Alba` = altitudine in aumento, `Tramonto` = in calo. Dettagli e limiti: [§12](#12-limitazioni-dichiarate-e-precisione) |
+Lo stato del Sole non è in questa card: è il blocco `Sole` della barra Tempo, alla destra del blocco Fase lunare — [§6.3](#63-blocchi-fase-lunare-e-sole-barra-in-basso-a-destra-dello-slider).
 
 **Blocco Allineamento ora** (serve **tutti e due** i punti):
 
@@ -265,7 +263,7 @@ fase 96% C (crescente) · sole: Tramonto nautico
 | `0,29° sopra` / `sotto` | scarto di altitudine rispetto alla linea |
 | `in azimut` / `in quota` | scarto praticamente nullo su quell'asse (< 0,005°): la Luna è centrata |
 | `fase 96% C (crescente)` | fase lunare in quell'istante |
-| `sole: Tramonto nautico` | stato del Sole in quell'istante (luce ambientale): `Giorno`, `Alba`/`Tramonto` (civile), `Alba/Tramonto nautico`, `Alba/Tramonto astronomico`, `Notte` — stesse soglie della riga `Sole · Stato` del box Dati ([§6.5](#65-card-dati-misure-luna-allineamento-ora)) |
+| `sole: Tramonto nautico` | stato del Sole in quell'istante (luce ambientale): `Giorno`, `Alba`/`Tramonto` (civile), `Alba/Tramonto nautico`, `Alba/Tramonto astronomico`, `Notte` — stesse soglie del blocco `Sole` della barra Tempo ([§6.3](#63-blocchi-fase-lunare-e-sole-barra-in-basso-a-destra-dello-slider)) |
 
 **Cliccare una riga adotta quell'istante** e la mette **in grassetto** finché non ne adotti un'altra o premi `Ricalcola`: `Data/ora` viene impostato, lo slider torna a 0 e tutto il resto (Luna in scena, blocco Fase lunare, righe **Luna ·**) si ricalcola su quell'ora. **La finestra resta aperta** con l'elenco: puoi adottare un altro istante senza ripetere la ricerca; `Ricalcola` riparte dal campo `Ricerca da`, non dall'orario adottato.
 
@@ -279,7 +277,7 @@ fase 96% C (crescente) · sole: Tramonto nautico
 | `Adesso` | riporta l'orario all'istante corrente e lo slider a 0 |
 | riga di stato | `Tempo effettivo (UTC): 2026-10-21 17:40:00 UTC · ora locale UTC+02:00 (con ora legale/solare del fuso Europe/Rome)` |
 
-Accanto allo slider, a sinistra: **`Orario in uso: …`** — l'orario effettivo della scena, aggiornato in tempo reale da slider, `−1 min`/`+1 min` e adozioni dei risultati. Alla **destra dello slider**: il blocco **Fase lunare** ([§6.3](#63-blocco-fase-lunare-barra-in-basso-a-destra-dello-slider)) — titolo, disco e percentuale all'orario in uso.
+Accanto allo slider, a sinistra: **`Orario in uso: …`** — l'orario effettivo della scena, aggiornato in tempo reale da slider, `−1 min`/`+1 min` e adozioni dei risultati. Alla **destra dello slider**: il blocco **Fase lunare** ([§6.3](#63-blocchi-fase-lunare-e-sole-barra-in-basso-a-destra-dello-slider)) — titolo, disco e percentuale all'orario in uso — e, alla sua destra, il blocco **Sole** con lo stato di luce all'orario in uso (compare dopo aver posizionato l'Osservatore; [§6.3](#63-blocchi-fase-lunare-e-sole-barra-in-basso-a-destra-dello-slider)).
 
 L'orario usato per **tutto** (Luna, fase, misure lunari) è `Data/ora + scostamento dello slider`, cioè il **Tempo effettivo** mostrato nella riga di stato. Lo stesso valore viene scritto nell'orologio interno della scena 3D (la cui animazione resta ferma).
 
@@ -463,7 +461,7 @@ Se invece il problema è inverso — il Target è fisso e cerchi **dove** metter
 | `N passaggi scartati (Luna sotto l'orizzonte)` | passaggi trovati ma esclusi perché la Luna era sotto l'orizzonte (non fotografabili); il conteggio include i passaggi che altrimenti apparirebbero in lista |
 | `Linea di vista indefinita: Observer e Target coincidono.` | i due punti sono sovrapposti: riposiziona l'Osservatore o il Target |
 
-**Clicca la riga** per adottare l'istante: `Data/ora` si aggiorna, lo slider va a 0, la finestra resta aperta con l'elenco (puoi adottarne un altro subito); la riga adottata appare **in grassetto** finché non ne adotti un'altra o premi `Ricalcola`; blocco **Fase lunare** e righe **Luna ·** si ricalcolano su quell'istante.
+**Clicca la riga** per adottare l'istante: `Data/ora` si aggiorna, lo slider va a 0, la finestra resta aperta con l'elenco (puoi adottarne un altro subito); la riga adottata appare **in grassetto** finché non ne adotti un'altra o premi `Ricalcola`; blocchi **Fase lunare** e **Sole** e righe **Luna ·** si ricalcolano su quell'istante.
 
 ### 8.4 Verifica finale in 3D (passaggio consigliato)
 
@@ -590,7 +588,7 @@ Sono i limiti **noti e voluti** dell'attuale release, non bug da segnalare:
 | Ostacoli | L'occlusione è valutata **campionando** la superficie 3D in 256 punti lungo la linea di vista ([§6.9](#69-occlusione-della-linea-di-vista)), non con ray casting: ostacoli più sottili del passo di campionamento o marginali possono sfuggire; zone non coperte dalla mesh 3D danno «non determinabile» (l'app scarica da sola i tile necessari lungo la linea), mai «libera». Conta solo ciò che è effettivamente modellato nella mesh. |
 | Suolo sotto l'Osservatore | `Altezza dal suolo` è riferita alla quota letta **al momento del clic**; dopo uno spostamento direzionale (◀▲▼▶) il suolo alla nuova posizione è **ricampionato** sui 3D Tiles prima di applicare il movimento — suolo non determinabile → spostamento non applicato, mai inventato. `−`/`+`/campo numerico cambiano solo la distanza dal suolo di riferimento del clic. |
 | Fase lunare | La frazione illuminata è **geocentrica** (definizione standard delle fasi); lo scarto topocentrico è sotto l'1%. Il **disco** disegnato è una rappresentazione equivalente (nessuna librazione, nessun dettaglio dei mari): contano i numeri. |
-| Stato del Sole | `Sole · Stato` e la colonna `sole:` dei risultati usano l'**altitudine geometrica (senza rifrazione) del centro del Sole** con le soglie USNO dei crepuscoli: −0,833° alba/tramonto (lembo superiore sull'orizzonte apparente: raggio 16′ + rifrazione 34′), −6° civile, −12° nautico, −18° astronomico, sotto −18° `Notte`. Il verso `Alba`/`Tramonto` è il segno della variazione dell'altitudine in 2 minuti (agli estremi polari il verso può essere non definito). Verificato contro JPL Horizons (24 istanti: angoli entro 0,005° e codice di presenza `*`/`C`/`N`/`A`/notte coincidente su tutti). |
+| Stato del Sole | Il blocco `Sole` della barra Tempo e la colonna `sole:` dei risultati usano l'**altitudine geometrica (senza rifrazione) del centro del Sole** con le soglie USNO dei crepuscoli: −0,833° alba/tramonto (lembo superiore sull'orizzonte apparente: raggio 16′ + rifrazione 34′), −6° civile, −12° nautico, −18° astronomico, sotto −18° `Notte`. Il verso `Alba`/`Tramonto` è il segno della variazione dell'altitudine in 2 minuti (agli estremi polari il verso può essere non definito). Verificato contro JPL Horizons (24 istanti: angoli entro 0,005° e codice di presenza `*`/`C`/`N`/`A`/notte coincidente su tutti). |
 | Fotocamera | Nessuna simulazione di sensore, focale, frustum o "Luna nel frame": [calcolo a mano, §7.3](#73-dal-numero-alla-focale). |
 | Funzionalità non ancora presenti | Ricerca per indirizzo, confronto di più candidati, salvataggio/condivisione della pianificazione (unica eccezione: la Home dell'Osservatore, §6.1), stime di esposizione. |
 | Tempo | Precisione **al minuto** sull'input e sulle etichette; la ricerca allineamenti campiona con il `Passo (min)` scelto e raffina gli attraversamenti, ma il risultato mostrato resta in ore:minuti. |
