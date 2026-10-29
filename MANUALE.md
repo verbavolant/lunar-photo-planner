@@ -66,7 +66,7 @@
 ┌──────────────────────────────────────────────────────────────────────────┐
 │ BARRETTA COMANDI  Osservatore · Target · Azzera · Vai a Home ·           │
 │    Imposta come Home · Vista Luna · Sopra Observer · 100 m · Chiavi API  │
-│    Cerca allineamenti Luna · Cerca luogo per il Target    Sviluppo: T-072│
+│    Cerca allineamenti Luna · Cerca luogo per il Target    Sviluppo: T-073│
 ├───────────────────────────┬──────────────────────────────────────────────┤
 │ BOX LATERALE (≈380 px)    │                                              │
 │  • POV camera             │            SCENA 3D                          │
@@ -153,7 +153,7 @@ Premi **`Vista Luna`**: la camera si mette 1 m sopra l'Osservatore, rivolta vers
 | `Chiavi API` | apre la finestra per inserire **le tue chiavi** (chiave Google Maps e/o token Cesium ion) e scegliere il provider della scena: sovrascrivono le chiavi configurate nel sito | i valori restano nel `localStorage` di questo browser; «Salva e applica» ricrea la scena; `?provider=` nell'URL ha priorità sulla scelta salvata ([§6.10](#610-finestra-chiavi-api), [§9](#9-parametri-nellurl-provider-tilemaxm-tilequality)) |
 | `Manuale` | apre questo manuale in una **finestra separata**, formattato in HTML | il contenuto è `MANUALE.md` alla root del repository; i collegamenti ai file del repo (es. `README.md`) portano a GitHub |
 
-A destra della barra, oltre ai pulsanti: **`Sviluppo: T-072`** — l'ID dell'ultimo task completato nel piano di sviluppo del progetto; si aggiorna a ogni task chiuso. L'orario in uso non sta qui: è nella card Tempo, accanto allo slider ([§6.7](#67-card-tempo-fascia-in-basso-tutta-larghezza)).
+A destra della barra, oltre ai pulsanti: **`Sviluppo: T-073`** — l'ID dell'ultimo task completato nel piano di sviluppo del progetto; si aggiorna a ogni task chiuso. L'orario in uso non sta qui: è nella card Tempo, accanto allo slider ([§6.7](#67-card-tempo-fascia-in-basso-tutta-larghezza)).
 
 > **Il punto attivo comanda il clic sulla scena.** Se dopo aver posizionato il Target lasci `Target` selezionato e clicchi sulla scena, sposti il **Target**, non l'Osservatore. Controlla quale dei due pulsanti è evidenziato.
 
